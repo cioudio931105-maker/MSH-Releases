@@ -57,6 +57,20 @@ def validate_acceptance(record: dict, version: str, commit: str) -> None:
             raise ValueError(f'Release acceptance is incomplete: {name}')
 
 
+def validate_public_acceptance(record: dict, version: str, commit: str) -> None:
+    """Only a small, reviewed summary may enter public source/Actions artifacts."""
+    validate_acceptance(record, version, commit)
+    if (set(record) != {'schema_version', 'version', 'source_commit', 'checks'}
+            or set(record['checks']) != set(CHECKS)):
+        raise ValueError('Public acceptance must contain only the approved summary fields')
+    for check in record['checks'].values():
+        if (set(check) != {'status', 'evidence'} or not isinstance(check['evidence'], str)
+                or len(check['evidence']) > 1500):
+            raise ValueError('Public acceptance must not contain raw lab records or attachments')
+    if SECRET.search(json.dumps(record, ensure_ascii=False).encode('utf-8')):
+        raise ValueError('Secret candidate in public acceptance summary')
+
+
 def formal_source_check(root: Path, version: str, acceptance: dict) -> str:
     if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
         raise ValueError('Public delivery requires a stable version; dev/candidate builds remain private')
@@ -65,7 +79,7 @@ def formal_source_check(root: Path, version: str, acceptance: dict) -> str:
         raise ValueError('Formal delivery requires a clean source tree')
     if git(root, 'rev-parse', f'v{version}^{{commit}}').strip() != commit:
         raise ValueError('Release tag does not match source HEAD')
-    validate_acceptance(acceptance, version, commit)
+    validate_public_acceptance(acceptance, version, commit)
     return commit
 
 

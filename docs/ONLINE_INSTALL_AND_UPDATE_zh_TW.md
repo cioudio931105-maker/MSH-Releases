@@ -1,6 +1,6 @@
 # MSH 線上安裝與自動更新
 
-本文件為 2026-11-17 核定的新流程。來源版本 `0.1.5-dev.4` 使用獨立的 `MSH-Releases` 發行來源，仍屬內部候選，非正式交付版。
+本文件依 2026-11-18 單一 repo 決定更新。新來源版本 `0.1.5-dev.5` 在 Public `MSH-Releases` 統一開發與發行，仍屬候選；尚未正式發布。
 不需要使用者安裝 Git、Python 或 Conda。模型與研究資料政策維持原狀。
 既有 `dev.2` 二進位仍包含先前的來源設定，原樣保留；其已驗證項目見[候選版驗證報告](ONLINE_INSTALL_VALIDATION_20261117.md)，不能視為已改用新來源。`dev.3` GPU 候選超過 Release 附件上限，由交付檢查攔下，未發布；`dev.4` 改用較高壓縮並保留自動更新進度視窗。
 
@@ -37,9 +37,9 @@ GPU 架構／驅動／CUDA 相容性、USB 相機與即時掃描速度都需要�
 
 ## GitHub 位置
 
-- 原始碼與研究歷史留在 Private 的 `cioudio931105-maker/Microscope-Scanner-Helper_MSH`；不變更其可見性或改寫歷史。
+- 日常應用程式來源改在 Public `cioudio931105-maker/MSH-Releases`；舊 Private `Microscope-Scanner-Helper_MSH` 保留研究歷史與原資料，不搬入舊 `.git` 或變更其可見性。
 - 經審核的安裝附件、checksum、manifest、說明與必要授權／對應來源交付資訊，發布到 Public 的 `cioudio931105-maker/MSH-Releases`；不搬入原庫 Git 歷史或研究資料。
-- 更新器讀取 `MSH-Releases/main/latest.json`，不是讀取原始碼庫的 main 或最新 commit 來直接執行程式碼。
+- 更新器讀取同庫 `MSH-Releases/main/latest.json`，不會直接執行 main 的最新原始碼。發版使用當次 job 的內建授權，不設定個人 token。
 - 更新範本為 `release/latest.example.json`；不能直接當成有效 manifest 發布。
 - 新版附件與有效 `latest.json` 尚未發布前維持手動提供測試包。APP 沒有內嵌 token，也不借用開發者的 Git 登入資訊。
 - 發行前仍需審查附件、授權／對應來源與驗收證據，再取得發布授權；本次改設定不執行 Release、tag 或上傳。
@@ -53,7 +53,7 @@ CPU／GPU 各使用獨立、已驗證的 Python 3.12 環境，先執行現有來
 ```powershell
 .\scripts\build_release.ps1 -Runtime cpu -PythonPath .\.venv312-cpu\Scripts\python.exe -Candidate
 .\scripts\build_release.ps1 -Runtime gpu -PythonPath .\.venv312-release-gpu\Scripts\python.exe -Candidate
-python scripts/build_online_installer.py --candidate --cpu dist/release/v0.1.5-dev.4/MSH_Setup_v0.1.5-dev.4_CPU_CANDIDATE.exe --gpu dist/release/v0.1.5-dev.4/MSH_Setup_v0.1.5-dev.4_GPU_CANDIDATE.exe
+python scripts/build_online_installer.py --candidate --cpu dist/release/v0.1.5-dev.5/MSH_Setup_v0.1.5-dev.5_CPU_CANDIDATE.exe --gpu dist/release/v0.1.5-dev.5/MSH_Setup_v0.1.5-dev.5_GPU_CANDIDATE.exe
 ```
 
 `build_online_installer.py` 要求 CPU/GPU 版本、mode、來源 commit、來源雜湊及純應用程式政策一致，並核對實際套件 checksum。
@@ -61,7 +61,7 @@ python scripts/build_online_installer.py --candidate --cpu dist/release/v0.1.5-d
 正式模式仍沿用乾淨來源與版本 tag 的建置要求；不允許把 candidate 直接改名成 release，也不覆寫既有產物。
 產物位於 `dist/release/v<版本>/`，包含安裝檔、`.sha256` 與 `.build-manifest.json`。
 正式版不能使用 `-Candidate`／`--candidate`；本次不建立或發布正式版。
-完整的一鍵建置、私人 artifact 審核及跨庫發行方式見[自動建置與發行](AUTOMATED_RELEASE_zh_TW.md)。
+完整的一鍵建置、同庫發行及公開安全驗收摘要方式見[自動建置與發行](AUTOMATED_RELEASE_zh_TW.md)。
 
 Basler 自動下載需提供三個參數：
 

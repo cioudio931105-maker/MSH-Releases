@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       operation:
-        description: 'candidate: private test build; prepare-release: reviewed stable build; publish: approve a prepared artifact'
+        description: 'candidate: validate without uploading binaries; prepare-release: reviewed stable build; publish: approve a prepared artifact'
         type: choice
         options: [candidate, prepare-release, publish]
         default: candidate
       evidence_ref:
-        description: 'Ref containing release/acceptance.json (prepare-release only)'
+        description: 'Ref containing a reviewed public-safe release/acceptance.json (prepare-release only)'
         default: main
         type: string
       build_run_id:
@@ -41,7 +41,7 @@ jobs:
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12.13'
-      - name: Load private acceptance evidence
+      - name: Load reviewed public-safe acceptance summary
         if: inputs.operation == 'prepare-release'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -61,6 +61,8 @@ jobs:
             $arguments += '--candidate'
           } else {
             Copy-Item -LiteralPath build/evidence-source/release/acceptance.json -Destination build/acceptance.json
+            python scripts/ci_release.py public-record --record build/acceptance.json
+            if ($LASTEXITCODE -ne 0) { throw 'Public acceptance summary rejected' }
             $arguments += @('--acceptance-record', 'build/acceptance.json')
           }
           $result = python scripts/release_pipeline.py @arguments
@@ -72,7 +74,7 @@ jobs:
       - if: inputs.operation == 'prepare-release'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: private-acceptance
+          name: release-acceptance
           path: build/acceptance.json
           retention-days: 7
           if-no-files-found: error
@@ -110,7 +112,7 @@ jobs:
       - if: inputs.operation == 'prepare-release'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: private-acceptance
+          name: release-acceptance
           path: build
       - name: Build fresh standalone installer and frozen software report
         shell: pwsh
@@ -123,22 +125,24 @@ jobs:
           else { $arguments += @('--acceptance-record', 'build/acceptance.json') }
           python scripts/release_pipeline.py @arguments
           if ($LASTEXITCODE -ne 0) { throw 'Installer build failed' }
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - if: inputs.operation == 'prepare-release'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: installer-${{ matrix.runtime }}
           path: dist/release/v${{ needs.resolve.outputs.version }}/MSH_Setup_*
           compression-level: 0
           retention-days: 14
           if-no-files-found: error
-      - if: always()
+      - if: inputs.operation == 'prepare-release' && always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: private-build-log-${{ matrix.runtime }}
+          name: build-log-${{ matrix.runtime }}
           path: build/release-logs/*.log
           retention-days: 7
           if-no-files-found: ignore
 
   assemble:
+    if: inputs.operation == 'prepare-release'
     needs: [resolve, package]
     runs-on: windows-2025
     timeout-minutes: 60
@@ -159,7 +163,7 @@ jobs:
       - if: inputs.operation == 'prepare-release'
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: private-acceptance
+          name: release-acceptance
           path: build
       - name: Install verified build compiler
         run: python scripts/ci_release.py inno
@@ -191,7 +195,7 @@ jobs:
           "Publishable: $($delivery.publishable). Source: $($delivery.source_commit)." >> $env:GITHUB_STEP_SUMMARY
           "| File | Bytes | SHA-256 |`n|---|---:|---|" >> $env:GITHUB_STEP_SUMMARY
           foreach ($asset in $delivery.assets) { "| $($asset.name) | $($asset.size_bytes) | $($asset.sha256) |" >> $env:GITHUB_STEP_SUMMARY }
-          "Review the private msh-delivery artifact. To approve a stable delivery, run publish with build_run_id=$env:GITHUB_RUN_ID. Candidate delivery cannot be published." >> $env:GITHUB_STEP_SUMMARY
+          "Review the public msh-delivery artifact. To approve this stable delivery, run publish with build_run_id=$env:GITHUB_RUN_ID. Unreviewed candidate binaries are not uploaded." >> $env:GITHUB_STEP_SUMMARY
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: msh-delivery
@@ -204,6 +208,9 @@ jobs:
     if: inputs.operation == 'publish' && github.ref == 'refs/heads/main'
     runs-on: windows-2025
     timeout-minutes: 90
+    permissions:
+      contents: write
+      actions: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -230,5 +237,5 @@ jobs:
         run: python scripts/ci_release.py verify-run --run-id "$env:PREPARED_RUN" --plan build/reviewed-delivery/release-plan.json
       - name: Publish verified assets, then update main/latest.json last
         env:
-          MSH_RELEASE_TOKEN: ${{ secrets.MSH_RELEASE_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
         run: python scripts/publish_release.py build/reviewed-delivery/release-plan.json --publish

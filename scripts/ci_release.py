@@ -1,4 +1,4 @@
-"""Small, fixed-origin helpers for the private release workflow."""
+"""Small, fixed-origin helpers for the single public application repository."""
 from __future__ import annotations
 
 import argparse
@@ -15,8 +15,10 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.publish_release import NoRedirect, validate_bundle
+from msh_update import RELEASE_REPOSITORY
+from scripts.release_bundle import load_json, validate_public_acceptance
 
-SOURCE_REPOSITORY = 'cioudio931105-maker/Microscope-Scanner-Helper_MSH'
+SOURCE_REPOSITORY = RELEASE_REPOSITORY
 INNO_URL = 'https://github.com/jrsoftware/issrc/releases/download/is-6_7_4/innosetup-6.7.4.exe'
 INNO_SHA256 = 'a549929319f9120716677c685535ca4671e4b937b5fdc87e2585f32d8eb30e8c'
 
@@ -77,7 +79,7 @@ def baseline_run(run_id: str):
         raise ValueError('Select the successful prepare-release workflow run ID')
     token = os.environ.get('GITHUB_TOKEN', '')
     if not token or os.environ.get('GITHUB_REPOSITORY') != SOURCE_REPOSITORY:
-        raise ValueError('Expected the private source repository Actions context')
+        raise ValueError('Expected the MSH-Releases Actions context')
     request = Request(f'https://api.github.com/repos/{SOURCE_REPOSITORY}/actions/runs/{run_id}',
                       headers={'Authorization': f'Bearer {token}', 'Accept': 'application/vnd.github+json',
                                'X-GitHub-Api-Version': '2026-03-10', 'User-Agent': 'MSH-Artifact-Review/1'})
@@ -92,11 +94,19 @@ def baseline_run(run_id: str):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('operation', choices=('inno', 'pylon', 'review-run', 'verify-run'))
+    parser.add_argument('operation', choices=('inno', 'pylon', 'review-run', 'verify-run', 'public-record'))
     parser.add_argument('--run-id', default='')
     parser.add_argument('--plan', type=Path)
+    parser.add_argument('--record', type=Path)
     args = parser.parse_args(argv)
-    if args.operation == 'inno':
+    if args.operation == 'public-record':
+        if not args.record:
+            parser.error('--record is required')
+        from msh_version import __version__
+        commit = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD']).decode().strip()
+        validate_public_acceptance(load_json(args.record), __version__, commit)
+        print('Public-safe acceptance schema and version/source identity verified; manual evidence review is still required.')
+    elif args.operation == 'inno':
         inno()
     elif args.operation == 'pylon':
         url = os.environ.get('MSH_PYLON_URL', '')

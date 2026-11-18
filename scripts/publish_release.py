@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from msh_distribution import is_application_file
 from msh_update import RELEASE_REPOSITORY, _ReleaseRedirectHandler, is_newer_version, parse_update_manifest
-from scripts.release_bundle import MAX_ASSET_BYTES, SECRET, load_json, public_source_file, sha256, validate_acceptance
+from scripts.release_bundle import MAX_ASSET_BYTES, SECRET, load_json, public_source_file, sha256, validate_public_acceptance
 
 
 class APIError(RuntimeError):
@@ -37,7 +37,7 @@ class NoRedirect(HTTPRedirectHandler):
 class GitHubClient:
     def __init__(self, token: str):
         if not token:
-            raise ValueError('Set MSH_RELEASE_TOKEN in the release environment; never put it in source or chat')
+            raise ValueError('The approved Actions publish job must provide its temporary GITHUB_TOKEN')
         self.token = token
         self.prefix = f'/repos/{RELEASE_REPOSITORY}'
 
@@ -105,7 +105,7 @@ def validate_bundle(plan_path: Path, *, publication: bool) -> dict:
     if publication:
         if plan.get('publishable') is not True or not re.fullmatch(r'\d+\.\d+\.\d+', version):
             raise ValueError('Internal candidate/dev bundles cannot be published')
-        validate_acceptance(plan.get('acceptance') or {}, version, plan.get('source_commit', ''))
+        validate_public_acceptance(plan.get('acceptance') or {}, version, plan.get('source_commit', ''))
     suffix = '' if plan.get('publishable') else '_CANDIDATE'
     allowed = {'LICENSE', 'THIRD_PARTY_NOTICES.md', 'RELEASE_NOTES.md', f'MSH_Source_v{version}.zip', f'MSH_Source_v{version}.zip.sha256'}
     for runtime in ('CPU', 'GPU', 'ONLINE'):
@@ -256,6 +256,15 @@ def publish(plan_path: Path, client: GitHubClient) -> dict:
     return {'version': plan['version'], 'status': 'published-and-verified'}
 
 
+def workflow_client() -> GitHubClient:
+    if (os.environ.get('GITHUB_ACTIONS') != 'true'
+            or os.environ.get('GITHUB_REPOSITORY') != RELEASE_REPOSITORY
+            or os.environ.get('GITHUB_REF') != 'refs/heads/main'
+            or os.environ.get('GITHUB_EVENT_NAME') != 'workflow_dispatch'):
+        raise ValueError('Publish only through the approved main workflow in MSH-Releases; no personal token is required')
+    return GitHubClient(os.environ.get('GITHUB_TOKEN', ''))
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('plan', type=Path)
@@ -266,7 +275,7 @@ def main(argv=None):
         print(json.dumps({'mode': 'dry-run', 'repository': plan['repository'], 'version': plan['version'],
                           'publishable': plan['publishable'], 'assets': len(plan['assets'])}))
         return 0
-    print(json.dumps(publish(args.plan.resolve(), GitHubClient(os.environ.get('MSH_RELEASE_TOKEN', '')))))
+    print(json.dumps(publish(args.plan.resolve(), workflow_client())))
     return 0
 
 

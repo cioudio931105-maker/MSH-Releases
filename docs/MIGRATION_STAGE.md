@@ -1,6 +1,6 @@
 # Workstage migration snapshot
 
-Stage: `wip-a27ede5abc`
+Stage: `active-single-repo`
 
 Only application files are retained here. Original data, weights, camera profiles and environments remain in their original private/local locations. This is a preserved workstage, not proof of completion or hardware acceptance. Do not publish binaries or merge experimental hardware code without review.
 

@@ -121,7 +121,7 @@ This is a payload check, not clean-machine installation or hardware acceptance.
 Never run motor, XY-stage, or camera-motion validation merely to test packaging.
 Those tests require an authorised B-site hardware session.
 
-## Combined build and cross-repository delivery
+## Combined build and single-repository delivery
 
 Use [the automated release workflow](../AUTOMATED_RELEASE_zh_TW.md) for the complete path.
 `scripts/release_pipeline.py build --candidate` tests and builds both runtimes,
@@ -129,6 +129,6 @@ audits each fresh payload, runs its software-only environment report and assembl
 the online installer plus a verified source/delivery bundle. It preserves previous
 local payloads and refuses to overwrite installers or delivery directories.
 Pinned CPU/GPU requirements are independent; no environment directory is copied.
-GitHub Actions prepares a private artifact first. A separate explicit publish run
+MSH-Releases is public: candidate jobs do not upload binaries. Fully reviewed formal builds produce a public delivery artifact. A separate explicit same-repository publish run with the temporary built-in GITHUB_TOKEN
 uses the reviewed artifact, uploads only approved assets, verifies anonymous access,
 and writes the public main/latest.json last. It does not copy private Git history.

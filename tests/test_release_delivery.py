@@ -141,6 +141,60 @@ class FakeClient:
 
 
 class DeliveryTests(unittest.TestCase):
+    def test_local_migration_and_workstate_records_are_never_application_sources(self):
+        for name in ('.migration-local/TODO.md', '.migration-local/WORK_STATE.md',
+                     '.migration-local/snapshots/branch/example.py'):
+            self.assertFalse(bundle.public_source_file(name), name)
+
+    def test_publish_uses_only_an_explicit_same_repo_main_job_token(self):
+        context = {'GITHUB_ACTIONS': 'true', 'GITHUB_REPOSITORY': RELEASE_REPOSITORY,
+                   'GITHUB_REF': 'refs/heads/main', 'GITHUB_EVENT_NAME': 'workflow_dispatch',
+                   'GITHUB_TOKEN': 'synthetic-short-lived-job-token'}
+        with patch.dict(os.environ, context, clear=True), patch.object(publisher, 'GitHubClient') as client:
+            self.assertIs(publisher.workflow_client(), client.return_value)
+            client.assert_called_once_with('synthetic-short-lived-job-token')
+        for key, value in (('GITHUB_ACTIONS', 'false'), ('GITHUB_REPOSITORY', 'other/repo'),
+                           ('GITHUB_REF', 'refs/heads/other'), ('GITHUB_EVENT_NAME', 'push')):
+            with self.subTest(key=key), patch.dict(os.environ, {**context, key: value}, clear=True):
+                with self.assertRaises(ValueError):
+                    publisher.workflow_client()
+        with patch.dict(os.environ, {**context, 'GITHUB_TOKEN': '', 'MSH_RELEASE_TOKEN': 'synthetic-personal-token'}, clear=True):
+            with self.assertRaisesRegex(ValueError, 'temporary GITHUB_TOKEN'):
+                publisher.workflow_client()
+
+    def test_public_acceptance_rejects_extra_raw_records_and_secret_candidates(self):
+        for record in (dict(acceptance(), raw_samples=['synthetic excluded fixture']),
+                       dict(acceptance(), private_attachments=['synthetic attachment'])):
+            with self.assertRaises(ValueError):
+                bundle.validate_public_acceptance(record, VERSION, COMMIT)
+        record = acceptance()
+        record['checks']['windows_10']['evidence'] = 'ghp_' + 'A' * 40
+        with self.assertRaisesRegex(ValueError, 'Secret candidate'):
+            bundle.validate_public_acceptance(record, VERSION, COMMIT)
+
+    def test_root_update_pointer_is_application_configuration_only_at_the_repo_root(self):
+        for name in ('latest.json', 'release/latest.example.json'):
+            self.assertTrue(bundle.public_source_file(name), name)
+        for name in ('other/latest.json', 'data/latest.json', '.env', 'model.pt', 'camera.pfs'):
+            self.assertFalse(bundle.public_source_file(name), name)
+
+    def test_public_workflow_limits_write_permission_and_does_not_upload_candidate_binaries(self):
+        import yaml
+        root = Path(__file__).resolve().parents[1]
+        text = (root / '.github/workflows/release.yml').read_text(encoding='utf-8')
+        workflow = yaml.safe_load(text)
+        self.assertEqual(workflow['permissions']['contents'], 'read')
+        self.assertEqual(workflow['jobs']['publish']['permissions']['contents'], 'write')
+        self.assertNotIn('secrets.MSH_RELEASE_TOKEN', text)
+        self.assertIn("inputs.operation == 'prepare-release'", workflow['jobs']['assemble']['if'])
+        for job_name, job in workflow['jobs'].items():
+            if job_name != 'publish':
+                self.assertNotEqual(job.get('permissions', {}).get('contents'), 'write')
+            for step in job['steps']:
+                if 'actions/upload-artifact@' in step.get('uses', ''):
+                    condition = job.get('if', '') + ' ' + step.get('if', '')
+                    self.assertIn("inputs.operation == 'prepare-release'", condition)
+
     @unittest.skipUnless(os.name == 'nt', 'Native Windows PowerShell build environment')
     def test_build_subprocess_loads_windows_powershell_hash_module_from_a_pwsh_parent(self):
         import subprocess
