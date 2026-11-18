@@ -10,7 +10,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from msh_distribution import is_application_file
+from msh_app.core.msh_distribution import is_application_file
 
 
 def main() -> int:

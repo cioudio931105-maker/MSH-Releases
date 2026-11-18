@@ -299,3 +299,6 @@ $RECYCLE.BIN/
 
 # Local migration records / external workstate; never public Git content
 /.migration-local/
+
+# Central dependency definitions
+!/requirements/*.txt

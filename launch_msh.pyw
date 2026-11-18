@@ -14,7 +14,7 @@ from pathlib import Path
 import tkinter as tk
 from tkinter import messagebox
 
-from msh_runtime import (
+from msh_app.core.msh_runtime import (
     SingleInstanceLock,
     application_root,
     configure_logging,
@@ -22,8 +22,8 @@ from msh_runtime import (
     default_output_dir,
     log_unhandled_exception,
 )
-from msh_version import __version__
-from msh_update_ui import install_help_menu
+from msh_app.core.msh_version import __version__
+from msh_app.core.msh_update_ui import install_help_menu
 
 PROJECT_ROOT = application_root()
 GUI_SCRIPT = PROJECT_ROOT / "msh_app" / "hardware" / "stepper_drag_gui.py"
@@ -151,6 +151,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    from msh_workers import dispatch_worker
+    from msh_app.core.msh_workers import dispatch_worker
     if not dispatch_worker(sys.argv[1:]):
         main()

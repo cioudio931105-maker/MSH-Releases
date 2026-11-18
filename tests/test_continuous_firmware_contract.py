@@ -1,7 +1,7 @@
 import ast
 from pathlib import Path
 import unittest
-from msh_motion_policy import FIXED_MOTOR_RPM, FIXED_STEP_INTERVAL_US
+from msh_app.core.msh_motion_policy import FIXED_MOTOR_RPM, FIXED_STEP_INTERVAL_US
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]

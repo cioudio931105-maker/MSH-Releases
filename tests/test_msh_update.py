@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from unittest.mock import patch
 
-from msh_update import (DEFAULT_UPDATE_MANIFEST_URL, RELEASE_REPOSITORY, UpdateCheckError,
+from msh_app.core.msh_update import (DEFAULT_UPDATE_MANIFEST_URL, RELEASE_REPOSITORY, UpdateCheckError,
                         UpdateManifest, check_for_update, is_newer_version,
                         parse_update_manifest, validate_installer_url)
 
@@ -83,12 +83,12 @@ class UpdateSelectionTests(unittest.TestCase):
             published_at="2026-08-21",
         )
 
-    @patch("msh_update.fetch_update_manifest")
+    @patch("msh_app.core.msh_update.fetch_update_manifest")
     def test_newer_manifest_is_returned(self, fetch) -> None:
         fetch.return_value = self.manifest
         self.assertIs(check_for_update("0.1.0"), self.manifest)
 
-    @patch("msh_update.fetch_update_manifest")
+    @patch("msh_app.core.msh_update.fetch_update_manifest")
     def test_current_manifest_returns_none(self, fetch) -> None:
         fetch.return_value = self.manifest
         self.assertIsNone(check_for_update("0.1.1"))

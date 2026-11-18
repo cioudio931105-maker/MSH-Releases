@@ -27,8 +27,8 @@ def requirements(path: Path):
 def generate(runtime: str, destination: Path) -> None:
     if sys.version_info[:2] != (3, 12):
         raise ValueError('Generate release locks inside the verified Python 3.12 environment')
-    queue = list(requirements(ROOT / f'requirements-{runtime}.txt'))
-    queue.extend(requirements(ROOT / 'requirements-build.txt'))
+    queue = list(requirements(ROOT / f'requirements/{runtime}.txt'))
+    queue.extend(requirements(ROOT / 'requirements/build.txt'))
     queue.append(Requirement('pip'))
     environment = {**default_environment(), 'extra': ''}
     pinned = {}

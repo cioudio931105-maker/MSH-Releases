@@ -12,7 +12,7 @@ import unittest
 from unittest.mock import patch
 import zipfile
 
-from msh_update import RELEASE_REPOSITORY
+from msh_app.core.msh_update import RELEASE_REPOSITORY
 from scripts import release_bundle as bundle
 from scripts import publish_release as publisher
 from scripts import ci_release

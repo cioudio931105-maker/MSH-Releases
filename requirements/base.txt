@@ -1,0 +1,18 @@
+# Runtime dependencies for the published MSH desktop application (Python 3.12).
+# This is intentionally not a Conda environment export.
+numpy>=2.0,<3
+opencv-contrib-python>=4.8,<6
+scipy>=1.11,<2
+scikit-image>=0.22,<1
+tifffile>=2024.2.12,<2027
+imageio>=2.37,<3
+tqdm>=4.66,<5
+pandas>=2.2,<4
+pillow>=10,<13
+pyserial>=3.5,<4
+torch>=2.6,<2.7
+torchvision>=0.21,<0.22
+ultralytics>=8.3,<9
+lap>=0.5.12,<1
+pypylon>=3
+kornia>=0.8,<1

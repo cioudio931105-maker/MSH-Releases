@@ -18,7 +18,7 @@ from typing import Any
 import cv2
 import numpy as np
 
-from msh_runtime import default_output_dir
+from msh_app.core.msh_runtime import default_output_dir
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 

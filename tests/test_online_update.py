@@ -12,12 +12,12 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from msh_environment import ComputeCapability, probe_compute
-from msh_update import (DownloadCancelled, RELEASE_REPOSITORY, UpdateCheckError, UpdateManifest,
+from msh_app.core.msh_environment import ComputeCapability, probe_compute
+from msh_app.core.msh_update import (DownloadCancelled, RELEASE_REPOSITORY, UpdateCheckError, UpdateManifest,
                         _ReleaseRedirectHandler, download_installer, parse_update_manifest,
                         validate_installer_url, verify_installer)
-from msh_update_safety import update_blockers
-from msh_update_ui import UpdateController
+from msh_app.core.msh_update_safety import update_blockers
+from msh_app.core.msh_update_ui import UpdateController
 
 DATA = b'MZ' + b'synthetic installer; never executed' * 50
 URL = f'https://github.com/{RELEASE_REPOSITORY}/releases/download/v1.0.0/MSH_Setup_v1.0.0_ONLINE.exe'
@@ -42,7 +42,7 @@ class Response(io.BytesIO):
 
 class DownloadTests(unittest.TestCase):
     def download(self, path, value=None, response=None, **kwargs):
-        with patch('msh_update.build_opener') as factory:
+        with patch('msh_app.core.msh_update.build_opener') as factory:
             factory.return_value.open.return_value = response or Response()
             return download_installer(value or manifest(), Path(path), **kwargs)
 
@@ -83,14 +83,14 @@ class DownloadTests(unittest.TestCase):
             cancel.clear()
             with self.assertRaises(DownloadCancelled):
                 self.download(directory, cancel=cancel, progress=lambda *_: cancel.set())
-            with patch('msh_update.build_opener') as factory:
+            with patch('msh_app.core.msh_update.build_opener') as factory:
                 factory.return_value.open.side_effect = OSError('offline')
                 with self.assertRaises(UpdateCheckError):
                     download_installer(manifest(), Path(directory))
             self.assertEqual(list(Path(directory).iterdir()), [])
 
     def test_connection_break_during_stream_is_converted_to_update_error(self):
-        with TemporaryDirectory() as directory, patch('msh_update.build_opener') as factory:
+        with TemporaryDirectory() as directory, patch('msh_app.core.msh_update.build_opener') as factory:
             response = Response()
             response.read = Mock(side_effect=IncompleteRead(b'partial'))
             factory.return_value.open.return_value = response
@@ -152,7 +152,7 @@ class CapabilityTests(unittest.TestCase):
 
 
 class SafetyTests(unittest.TestCase):
-    @patch('msh_update_ui.messagebox')
+    @patch('msh_app.core.msh_update_ui.messagebox')
     def test_manual_check_starts_download_without_an_extra_confirmation(self, boxes):
         controller = self.controller()
         controller._manual = True
@@ -161,14 +161,14 @@ class SafetyTests(unittest.TestCase):
             offer.assert_called_once_with(manifest(), automatic=True)
         boxes.askyesno.assert_not_called()
 
-    @patch('msh_update_ui.messagebox')
-    @patch('msh_update_ui.sys.frozen', True, create=True)
+    @patch('msh_app.core.msh_update_ui.messagebox')
+    @patch('msh_app.core.msh_update_ui.sys.frozen', True, create=True)
     def test_explicit_update_waits_without_stopping_devices_then_closes_automatically(self, boxes):
         controller = self.controller()
         controller.gui.cap = object()
         controller.root.winfo_exists.return_value = False
-        with TemporaryDirectory() as directory, patch('msh_update_ui.tk.Toplevel') as window, \
-                patch('msh_update_ui.ttk.Label'), patch('msh_update_ui.ttk.Button'):
+        with TemporaryDirectory() as directory, patch('msh_app.core.msh_update_ui.tk.Toplevel') as window, \
+                patch('msh_app.core.msh_update_ui.ttk.Label'), patch('msh_app.core.msh_update_ui.ttk.Button'):
             path = Path(directory) / 'setup.exe'
             path.write_bytes(DATA)
             controller.ready = (path, manifest())
@@ -183,7 +183,7 @@ class SafetyTests(unittest.TestCase):
             boxes.askyesno.assert_not_called()
             window.return_value.destroy.assert_called_once()
 
-    @patch('msh_update_ui.messagebox')
+    @patch('msh_app.core.msh_update_ui.messagebox')
     def test_cancel_waiting_preserves_download_without_later_closing_the_app(self, boxes):
         controller = self.controller()
         controller.waiting_to_install = True
@@ -197,9 +197,9 @@ class SafetyTests(unittest.TestCase):
         self.assertIsNone(controller.pending)
 
     def test_software_report_worker_does_not_load_gui_or_execute_a_hardware_worker(self):
-        from msh_workers import dispatch_worker
-        with TemporaryDirectory() as directory, patch('msh_environment.environment_report', return_value='software only'), \
-                patch('msh_workers.configure_runtime_environment'), patch('msh_workers.runpy.run_path') as execute:
+        from msh_app.core.msh_workers import dispatch_worker
+        with TemporaryDirectory() as directory, patch('msh_app.core.msh_environment.environment_report', return_value='software only'), \
+                patch('msh_app.core.msh_workers.configure_runtime_environment'), patch('msh_app.core.msh_workers.runpy.run_path') as execute:
             output = Path(directory) / 'report.md'
             self.assertTrue(dispatch_worker(['--msh-environment-report', str(output)]))
             self.assertEqual(output.read_text(encoding='utf-8'), 'software only\n')
@@ -227,7 +227,7 @@ class SafetyTests(unittest.TestCase):
         gui = SimpleNamespace(_on_close=Mock())
         return UpdateController(root, gui)
 
-    @patch('msh_update_ui.messagebox')
+    @patch('msh_app.core.msh_update_ui.messagebox')
     def test_background_check_failure_is_silent_and_manual_failure_is_visible(self, boxes):
         controller = self.controller()
         controller._manual = False
@@ -237,7 +237,7 @@ class SafetyTests(unittest.TestCase):
         controller._handle('checked', None, OSError('offline'))
         boxes.showinfo.assert_called_once()
 
-    @patch('msh_update_ui.messagebox')
+    @patch('msh_app.core.msh_update_ui.messagebox')
     def test_active_hardware_never_closes_for_update(self, boxes):
         controller = self.controller()
         controller.gui.cap = object()
@@ -246,8 +246,8 @@ class SafetyTests(unittest.TestCase):
         controller.gui._on_close.assert_not_called()
         self.assertIsNone(controller.pending)
 
-    @patch('msh_update_ui.messagebox')
-    @patch('msh_update_ui.sys.frozen', True, create=True)
+    @patch('msh_app.core.msh_update_ui.messagebox')
+    @patch('msh_app.core.msh_update_ui.sys.frozen', True, create=True)
     def test_normal_close_failure_never_schedules_installer(self, boxes):
         controller = self.controller()
         boxes.askyesno.return_value = True
@@ -259,8 +259,8 @@ class SafetyTests(unittest.TestCase):
             controller._offer_install()
         self.assertIsNone(controller.pending)
 
-    @patch('msh_update_ui.messagebox')
-    @patch('msh_update_ui.sys.frozen', True, create=True)
+    @patch('msh_app.core.msh_update_ui.messagebox')
+    @patch('msh_app.core.msh_update_ui.sys.frozen', True, create=True)
     def test_installer_handoff_is_pending_only_after_successful_normal_close(self, boxes):
         controller = self.controller()
         boxes.askyesno.return_value = True
@@ -269,12 +269,12 @@ class SafetyTests(unittest.TestCase):
             path = Path(directory) / 'setup.exe'
             path.write_bytes(DATA)
             controller.ready = (path, manifest())
-            with patch('msh_update_ui.subprocess.Popen') as launch:
+            with patch('msh_app.core.msh_update_ui.subprocess.Popen') as launch:
                 controller._offer_install()
                 launch.assert_not_called()
                 self.assertEqual(controller.pending, controller.ready)
 
-    @patch('msh_update_ui.subprocess.Popen')
+    @patch('msh_app.core.msh_update_ui.subprocess.Popen')
     def test_helper_is_scheduled_without_shell_or_forced_termination(self, launch):
         controller = self.controller()
         with TemporaryDirectory() as directory:
@@ -290,7 +290,7 @@ class SafetyTests(unittest.TestCase):
         self.assertNotIn('PSModulePath', launch.call_args.kwargs['env'])
         self.assertTrue(controller.cancel.is_set())
 
-    @patch('msh_update_ui.subprocess.Popen')
+    @patch('msh_app.core.msh_update_ui.subprocess.Popen')
     def test_frozen_handoff_clears_child_dll_and_python_paths_then_restores_parent(self, launch):
         controller = self.controller()
         with TemporaryDirectory() as directory:
@@ -298,10 +298,10 @@ class SafetyTests(unittest.TestCase):
             path = root / 'setup.exe'
             path.write_bytes(DATA)
             controller.pending = (path, manifest())
-            with patch('msh_update_ui.sys._MEIPASS', str(root / 'internal'), create=True), \
-                    patch('msh_update_ui.application_root', return_value=Path(__file__).resolve().parents[1]), \
-                    patch('msh_update_ui.ctypes.windll.kernel32.SetDllDirectoryW', return_value=1) as dll, \
-                    patch.dict('msh_update_ui.os.environ', {'PATH': str(root / 'internal') + ';C:\\Windows',
+            with patch('msh_app.core.msh_update_ui.sys._MEIPASS', str(root / 'internal'), create=True), \
+                    patch('msh_app.core.msh_update_ui.application_root', return_value=Path(__file__).resolve().parents[1]), \
+                    patch('msh_app.core.msh_update_ui.ctypes.windll.kernel32.SetDllDirectoryW', return_value=1) as dll, \
+                    patch.dict('msh_app.core.msh_update_ui.os.environ', {'PATH': str(root / 'internal') + ';C:\\Windows',
                                                            'PYTHONHOME': 'old-python', 'PYTHONPATH': 'old-source'}):
                 controller.handoff_after_close()
                 self.assertEqual(dll.call_args_list[0].args, (None,))

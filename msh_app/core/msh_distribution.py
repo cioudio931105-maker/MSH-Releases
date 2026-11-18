@@ -40,7 +40,7 @@ def is_application_file(relative_path: str | Path) -> bool:
                     ".github/workflows/release.yml"} or name in {".gitignore", ".gitattributes"}:
         return True
     if path.suffix.lower() == ".txt":
-        return parts[0] == "docs" or name.startswith(("requirements", "third_party_license")) or name == "prerequisites.txt"
+        return parts[0] in {"docs", "requirements"} or name.startswith(("requirements", "third_party_license")) or name == "prerequisites.txt"
     return path.suffix.lower() in SOURCE_SUFFIXES or name == "makefile" or path.suffix.lower() == ".cjs"
 
 

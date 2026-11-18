@@ -9,7 +9,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from unittest import mock
 
-import msh_runtime
+from msh_app.core import msh_runtime
 
 
 class SingleInstanceLockTests(unittest.TestCase):
@@ -26,6 +26,16 @@ class SingleInstanceLockTests(unittest.TestCase):
         finally:
             first.close()
             second.close()
+
+
+class RuntimeRootTests(unittest.TestCase):
+    def test_source_root_stays_at_workspace_after_module_move(self):
+        self.assertEqual(msh_runtime.application_root(), Path(__file__).resolve().parents[1])
+        self.assertTrue((msh_runtime.application_root() / 'launch_msh.pyw').is_file())
+
+    def test_frozen_root_uses_pyinstaller_resources(self):
+        with mock.patch.object(msh_runtime.sys, '_MEIPASS', 'frozen-resources', create=True):
+            self.assertEqual(msh_runtime.application_root(), Path('frozen-resources'))
 
 
 class RuntimeLoggingTests(unittest.TestCase):

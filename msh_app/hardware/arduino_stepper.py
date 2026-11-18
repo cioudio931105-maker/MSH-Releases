@@ -13,7 +13,7 @@ from pathlib import Path
 _WORKSPACE_ROOT = Path(__file__).resolve().parents[2]
 if not getattr(sys, "frozen", False) and str(_WORKSPACE_ROOT) not in sys.path:
     sys.path.insert(0, str(_WORKSPACE_ROOT))
-from msh_motion_policy import (
+from msh_app.core.msh_motion_policy import (
     FIXED_MOTOR_RPM, FIXED_STEP_DELAY_MS, FIXED_STEP_INTERVAL_US,
     FIXED_STEP_DELAY_S, LEGACY_PRELOAD_ENABLED, MOTION_POLICY_REPLY,
     require_fixed_rpm,

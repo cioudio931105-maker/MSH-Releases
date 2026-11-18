@@ -15,7 +15,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from scripts.publish_release import NoRedirect, validate_bundle
-from msh_update import RELEASE_REPOSITORY
+from msh_app.core.msh_update import RELEASE_REPOSITORY
 from scripts.release_bundle import load_json, validate_public_acceptance
 
 SOURCE_REPOSITORY = RELEASE_REPOSITORY
@@ -102,7 +102,7 @@ def main(argv=None):
     if args.operation == 'public-record':
         if not args.record:
             parser.error('--record is required')
-        from msh_version import __version__
+        from msh_app.core.msh_version import __version__
         commit = subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD']).decode().strip()
         validate_public_acceptance(load_json(args.record), __version__, commit)
         print('Public-safe acceptance schema and version/source identity verified; manual evidence review is still required.')

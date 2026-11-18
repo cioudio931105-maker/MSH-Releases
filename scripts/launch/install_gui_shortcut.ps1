@@ -7,7 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$projectRoot = [System.IO.Path]::GetFullPath($PSScriptRoot)
+$projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $launcher = Join-Path $projectRoot "launch_msh.pyw"
 $iconPath = Join-Path $projectRoot "assets\msh-pixel-icon.ico"
 $shortcutName = "MSH.lnk"

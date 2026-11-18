@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from msh_model_policy import require_local_model
+from msh_app.core.msh_model_policy import require_local_model
 
 import argparse
 import shutil

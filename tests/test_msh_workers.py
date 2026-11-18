@@ -2,7 +2,7 @@ from pathlib import Path
 import sys
 import unittest
 from unittest.mock import patch
-import msh_workers
+from msh_app.core import msh_workers
 
 
 class MshWorkerTests(unittest.TestCase):

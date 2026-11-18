@@ -12,9 +12,9 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from msh_distribution import is_application_file
-from msh_update import RELEASE_REPOSITORY, is_newer_version
-from msh_version import __version__
+from msh_app.core.msh_distribution import is_application_file
+from msh_app.core.msh_update import RELEASE_REPOSITORY, is_newer_version
+from msh_app.core.msh_version import __version__
 
 CHECKS = ('windows_10', 'windows_11', 'b_site_hardware', 'redistribution_and_source')
 SECRET = re.compile(rb'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bgh[pousr]_[A-Za-z0-9]{30,}|\bgithub_pat_[A-Za-z0-9_]{40,}|\bsk-proj-[A-Za-z0-9_-]{30,}')

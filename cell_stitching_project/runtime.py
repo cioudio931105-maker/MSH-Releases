@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import cv2
-from msh_environment import probe_compute
+from msh_app.core.msh_environment import probe_compute
 
 
 @dataclass(slots=True)

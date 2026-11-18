@@ -8,8 +8,8 @@ import tempfile
 import unittest
 from unittest.mock import Mock, patch
 
-from msh_distribution import application_files, is_application_file
-from msh_model_policy import local_training_options, require_local_model
+from msh_app.core.msh_distribution import application_files, is_application_file
+from msh_app.core.msh_model_policy import local_training_options, require_local_model
 from scripts.audit_packaged_application import audit as audit_payload
 from offline_cell_analysis.offline_pipeline.model_files import require_local_model as offline_local_model
 
@@ -128,7 +128,7 @@ class ApplicationDistributionTests(unittest.TestCase):
             "cell_stitching_project/train_yolo_wbc400.py", "tests/test_application_distribution.py",
             "cell_stitching_project/ssd/vision/datasets/voc_dataset.py", "README.md",
             "assets/branding/v1/msh-pixel-icon-v1.png", "release/latest.example.json",
-            "tools/physician_review/MSH_tool.html", "requirements-cpu.txt", "models/README.md",
+            "tools/physician_review/MSH_tool.html", "requirements/cpu.txt", "docs/USER_MODELS.md",
             "LICENSE", ".gitattributes", "licenses/README.md", "licenses/third_party/pypylon/26.7/1/LICENSE",
             "licenses/third_party/torch/2.6.0/1/LICENSE.txt",
         ):
@@ -164,8 +164,8 @@ class ApplicationDistributionTests(unittest.TestCase):
                 self.pure = self.scripts = []
                 self.kwargs = kwargs
 
-        namespace = dict(SPECPATH=str(ROOT), Analysis=AnalysisStub, PYZ=Mock(), EXE=Mock(), COLLECT=Mock())
-        exec(compile((ROOT / "MSH.spec").read_text(encoding="utf-8"), "MSH.spec", "exec"), namespace)
+        namespace = dict(SPECPATH=str(ROOT / "installer"), Analysis=AnalysisStub, PYZ=Mock(), EXE=Mock(), COLLECT=Mock())
+        exec(compile((ROOT / "installer/MSH.spec").read_text(encoding="utf-8"), "installer/MSH.spec", "exec"), namespace)
         analysis = namespace["a"]
         selected = {Path(source).relative_to(ROOT).as_posix() for source, _ in analysis.kwargs["datas"]}
         self.assertTrue({"LICENSE", "THIRD_PARTY_NOTICES.md", "licenses/README.md"}.issubset(selected))

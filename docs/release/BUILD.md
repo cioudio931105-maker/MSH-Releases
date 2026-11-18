@@ -15,7 +15,7 @@ Keep CPU and GPU dependencies in separate environments. Use an explicit runtime 
 package-build commands for clarity. See [the current online flow](../ONLINE_INSTALL_AND_UPDATE_zh_TW.md).
 
 The source-review snapshot records the tested build environment in
-`requirements-release-v0.1.4.txt`. It is an installed-version inventory, not a
+`docs/legacy/requirements-release-v0.1.4.txt`. It is an installed-version inventory, not a
 guarantee of byte-identical builds. Keep the Python/Windows/toolchain baseline too.
 `LICENSE`, `THIRD_PARTY_NOTICES.md` and `licenses/` are required release inputs;
 the spec packages their notice texts, and the payload auditor checks them against
@@ -25,7 +25,7 @@ review the result before replacing the versioned notice set.
 
 ```powershell
 .\.venv312\python.exe -m venv .venv312-cpu
-.\.venv312-cpu\Scripts\python.exe -m pip install -r requirements-cpu.txt -r requirements-build.txt
+.\.venv312-cpu\Scripts\python.exe -m pip install -r requirements/cpu.txt -r requirements/build.txt
 .\scripts\build_release.ps1 -Runtime cpu -PythonPath .\.venv312-cpu\Scripts\python.exe
 ```
 
@@ -41,7 +41,7 @@ pypylon, and native DLLs are materially more reliable than a self-extracting
 onefile executable.
 
 For the optional NVIDIA/CUDA build, prepare a separate environment with
-`requirements-gpu.txt`, then run:
+`requirements/gpu.txt`, then run:
 
 ```powershell
 .\scripts\build_release.ps1 -Runtime gpu -PythonPath .\.venv312\python.exe
@@ -53,8 +53,8 @@ other rather than creating two conflicting MSH installations.
 
 ## Client review update manifest
 
-MSH reads the public `MSH-Releases/main/latest.json` manifest configured in `msh_update.py`.
-The development repository and its research history stay private. Do
+MSH reads the public `MSH-Releases/main/latest.json` manifest configured in `msh_app/core/msh_update.py`.
+Application development uses this same public repository; original private research history remains separate. Do
 not ship public client builds pointing at an inaccessible private repository, and never embed a GitHub token
 in the application. Start from `release/latest.example.json`, then for every
 review release:
@@ -75,7 +75,7 @@ Private/offline access failures do not prevent using the current application.
 
 The source is now `0.1.5-dev.3`; the existing `dev.2` candidate binaries retain
 their earlier endpoint and are not rewritten. Rebuild CPU, GPU and online packages
-before using the new endpoint. The online builder checks `msh_update.py` provenance
+before using the new endpoint. The online builder checks `msh_app/core/msh_update.py` provenance
 as well as bootstrapper sources to reject mixed endpoint configurations.
 
 Do not run `ISCC.exe` directly for a release. Only `scripts\build_release.ps1` creates
