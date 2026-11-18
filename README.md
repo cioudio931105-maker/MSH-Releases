@@ -335,7 +335,7 @@ MSH 的正式第一版識別（捷徑／視窗圖示與啟動畫面）保存在
 .\run_hardware_gui.bat
 ```
 
-啟動紀錄寫入 `logs/hardware_gui_startup.log`；`logs/` 為本機執行資料，不應加入 Git。可在不啟動 GUI 或連接硬體的情況下檢查啟動環境：
+來源版的啟動紀錄同時寫入 `%LOCALAPPDATA%\MSH\msh.log` 與 `logs/hardware_gui_startup.log`；`logs/` 為本機執行資料，不應加入 Git。可在不啟動 GUI 或連接硬體的情況下檢查啟動環境：
 
 ```powershell
 .\launch_hardware_gui.ps1 -CheckOnly
