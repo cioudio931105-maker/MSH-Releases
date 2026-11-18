@@ -6,6 +6,18 @@ from typing import Callable, Optional
 import os
 import re
 import time
+import sys
+from pathlib import Path
+
+# Also support direct launches of the legacy hardware scripts.
+_WORKSPACE_ROOT = Path(__file__).resolve().parents[4]
+if not getattr(sys, "frozen", False) and str(_WORKSPACE_ROOT) not in sys.path:
+    sys.path.insert(0, str(_WORKSPACE_ROOT))
+from msh_motion_policy import (
+    FIXED_MOTOR_RPM, FIXED_STEP_DELAY_MS, FIXED_STEP_INTERVAL_US,
+    FIXED_STEP_DELAY_S, LEGACY_PRELOAD_ENABLED, MOTION_POLICY_REPLY,
+    require_fixed_rpm,
+)
 
 try:
     import serial
@@ -115,11 +127,11 @@ class ArduinoStepper:
     baud: int = 115200
     timeout_s: float = 2.0
     boot_wait_s: float = 2.0
-    backlash_steps: int = 80
+    backlash_steps: int = 0
     default_settle_s: float = 0.25
     warmup_steps: int = 80
-    warmup_cycles: int = 1
-    _supports_motor_id: bool = True
+    warmup_cycles: int = 0
+    _supports_motor_id: bool = False
 
     _ser: Optional[serial.Serial] = None
     _backlash_steps_by_motor: dict[int, int] = field(default_factory=dict)
@@ -139,10 +151,10 @@ class ArduinoStepper:
         self._ser = serial.Serial(self.port, self.baud, timeout=self.timeout_s)
 
     def connect(self, *, initialize_speed: bool = True, probe_capabilities: bool = True) -> None:
-        """Open serial without changing controller settings unless requested.
+        """Open only a controller advertising the fixed production policy.
 
-        Existing step-based callers retain the legacy defaults. The manual
-        low-speed GUI opts out because it uses the firmware's ``RUN`` command.
+        The legacy keyword arguments are retained for callers, but cannot
+        bypass the read-only contract check or enable a speed-changing probe.
         """
         if self._ser and self._ser.is_open:
             return
@@ -151,16 +163,29 @@ class ArduinoStepper:
         self._ser.reset_input_buffer()
         self._ser.reset_output_buffer()
         self._last_direction_by_motor.clear()
-        self._supports_motor_id = self._probe_motor_id_support() if probe_capabilities else False
-        if initialize_speed:
-            self._initialize_motor_speeds_ms(8)
+        self._supports_motor_id = False
+        try:
+            self._write("MOTION_POLICY", _retry=False)
+            response = self._wait_for_final_response(("MOTION_POLICY ",))
+            if response != MOTION_POLICY_REPLY:
+                raise RuntimeError(f"Incompatible motion policy: {response!r}")
+        except Exception:
+            # No motion or settings commands may be sent to an unknown board.
+            self._ser.close()
+            self._ser = None
+            raise
+        self._speed_delay_s_by_motor[0] = FIXED_STEP_DELAY_S
 
     def close(self) -> None:
         if self._ser:
             try:
                 if self._ser.is_open:
                     try:
-                        self._write("STOP", _retry=False)
+                        # Closing a link must never leave a hold-current command
+                        # active indefinitely. Manual button release uses STOP to
+                        # hold position; connection shutdown explicitly releases.
+                        self._write("RELEASE", _retry=False)
+                        self._ser.flush()
                     except Exception:
                         pass
                 self._ser.close()
@@ -208,9 +233,13 @@ class ArduinoStepper:
         return False
 
     def set_speed_us(self, micros: int) -> None:
-        value = max(1, int(micros))
-        self._write_and_wait_ok(f"SPEED_US {value}")
-        self._speed_delay_s_by_motor[self._resolve_motor_key(None)] = value / 1_000_000.0
+        if float(micros) != FIXED_STEP_INTERVAL_US:
+            raise ValueError("All production motion is fixed at 0.02 RPM.")
+        self.set_fixed_speed()
+
+    def set_fixed_speed(self) -> None:
+        self._write_and_wait_ok(f"SPEED_RPM {FIXED_MOTOR_RPM:.3f}")
+        self._speed_delay_s_by_motor[0] = FIXED_STEP_DELAY_S
 
     def _initialize_motor_speeds_ms(self, ms: int) -> None:
         if self._supports_motor_id:
@@ -220,7 +249,9 @@ class ArduinoStepper:
             self.set_speed_ms(ms)
 
     def set_speed_ms(self, ms: int, motor_id: int | None = None) -> None:
-        value = max(1, int(ms))
+        if float(ms) != FIXED_STEP_DELAY_MS:
+            raise ValueError("All production motion is fixed at 0.02 RPM.")
+        value = FIXED_STEP_DELAY_MS
         if not self._supports_motor_id:
             if motor_id is not None and motor_id != 0:
                 raise RuntimeError("Legacy firmware only supports motor 0 on this serial link.")
@@ -237,9 +268,9 @@ class ArduinoStepper:
             self._speed_delay_s_by_motor[motor_key] = value / 1000.0
 
     def run_continuous(self, direction: int, rpm: float) -> str:
+        require_fixed_rpm(rpm)
         direction_text = "CW" if int(direction) >= 0 else "CCW"
-        rpm_value = max(0.01, min(15.0, float(rpm)))
-        return self._write_and_wait_ok(f"RUN {direction_text} {rpm_value:.3f}")
+        return self._write_and_wait_ok(f"RUN {direction_text} {FIXED_MOTOR_RPM:.3f}")
 
     def release(self) -> str:
         return self._write_and_wait_ok("RELEASE")
@@ -260,6 +291,8 @@ class ArduinoStepper:
                 raise RuntimeError(resp)
             if any(resp.startswith(prefix) for prefix in accepted_prefixes):
                 return resp
+            if resp in {"OK STOPPED", "OK RELEASED"}:
+                raise RuntimeError("Motion interrupted before completion.")
         raise TimeoutError(f"Timed out waiting for {accepted_prefixes}; last response={last_resp!r}")
 
     def _write_and_wait_ok(self, line: str, timeout_s: float | None = None) -> str:
@@ -361,10 +394,12 @@ class ArduinoStepper:
         else:
             line = f"CALI {int(motor_id)} {value}"
         self._write(line)
-        return self._wait_for_final_response(("OK",), timeout_s=max(self.timeout_s, value * 0.1 + 10.0))
+        return self._wait_for_final_response(("OK CALIBRATED",), timeout_s=self._move_timeout_s(value * 2, motor_id))
 
     def set_backlash_steps(self, steps: int, motor_id: int | None = None) -> None:
         value = max(0, int(steps))
+        if not LEGACY_PRELOAD_ENABLED and value:
+            raise ValueError("Backlash compensation is isolated from production motion.")
         if motor_id is None:
             self.backlash_steps = value
             return
@@ -380,8 +415,7 @@ class ArduinoStepper:
         return max(0, int(self._backlash_steps_by_motor.get(motor_key, self.backlash_steps)))
 
     def _move_timeout_s(self, steps: int, motor_id: int | None = None) -> float:
-        motor_key = self._resolve_motor_key(motor_id)
-        delay_s = float(self._speed_delay_s_by_motor.get(motor_key, 0.008))
+        delay_s = FIXED_STEP_DELAY_S
         expected_s = abs(int(steps)) * max(0.000001, delay_s)
         margin_s = max(15.0, expected_s * 0.35)
         return max(float(self.timeout_s), 30.0, expected_s + margin_s)
@@ -394,7 +428,7 @@ class ArduinoStepper:
         direction = 1 if requested_steps > 0 else -1
         motor_key = self._resolve_motor_key(motor_id)
         last_direction = self._last_direction_by_motor.get(motor_key)
-        backlash_steps = self._resolve_backlash_steps(motor_id)
+        backlash_steps = self._resolve_backlash_steps(motor_id) if LEGACY_PRELOAD_ENABLED else 0
         compensated_steps = requested_steps
         if backlash_steps > 0 and last_direction is not None and last_direction != direction:
             compensated_steps += direction * backlash_steps
@@ -438,6 +472,8 @@ class ArduinoStepper:
                 continue
             if resp.startswith("ERR"):
                 raise RuntimeError(resp)
+            if resp in {"OK STOPPED", "OK RELEASED"}:
+                raise RuntimeError("MOVE interrupted before completion.")
             if resp.startswith("DONE"):
                 if requested_steps != 0:
                     self._last_direction_by_motor[self._resolve_motor_key(motor_id)] = 1 if requested_steps > 0 else -1
@@ -454,6 +490,8 @@ class ArduinoStepper:
         motor_id: int | None = None,
         interval_s: float = 0.05,
     ) -> None:
+        if not LEGACY_PRELOAD_ENABLED:
+            raise RuntimeError("Motor warmup is isolated; no fallback movements are allowed.")
         step_count = max(1, int(self.warmup_steps if steps is None else steps))
         cycle_count = max(0, int(self.warmup_cycles if cycles is None else cycles))
         if cycle_count == 0:
@@ -510,6 +548,11 @@ class ArduinoStepper:
         requested_steps = int(steps)
         if requested_steps == 0:
             return ""
+        if not LEGACY_PRELOAD_ENABLED:
+            return self.move_stabilized(
+                requested_steps, wait_done=wait_done, motor_id=motor_id,
+                apply_backlash=False, settle_s=settle_s,
+            )
 
         approach = 1 if int(approach_direction) >= 0 else -1
         direction = 1 if requested_steps > 0 else -1
@@ -590,17 +633,6 @@ class ArduinoStepper:
         return moves_done
 
     def _probe_motor_id_support(self) -> bool:
-        try:
-            self._write("SPEED_MS 1 700")
-            t0 = time.time()
-            while time.time() - t0 < min(self.timeout_s, 1.0):
-                resp = self._readline()
-                if not resp:
-                    continue
-                if resp == "OK":
-                    return True
-                if resp.startswith("ERR"):
-                    return False
-            return False
-        except Exception:
-            return False
+        # Production uses one verified fixed-policy controller per serial link.
+        # Speed-writing capability probes are no longer used.
+        return False

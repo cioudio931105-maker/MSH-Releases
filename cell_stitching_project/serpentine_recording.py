@@ -12,6 +12,7 @@ from typing import Protocol, Sequence
 
 import cv2
 import numpy as np
+from msh_motion_policy import FIXED_STEP_DELAY_MS
 
 Point = tuple[float, float]
 
@@ -246,7 +247,7 @@ class SerialXYStage:
         baud: int = 115200,
         timeout_s: float = 2.0,
         boot_wait_s: float = 2.0,
-        motor_speed_ms: int = 8,
+        motor_speed_ms: int = FIXED_STEP_DELAY_MS,
         hold: bool = True,
         x_sign: int = 1,
         y_sign: int = 1,
@@ -262,10 +263,12 @@ class SerialXYStage:
         self.timeout_s = float(timeout_s)
         self.boot_wait_s = float(boot_wait_s)
         self.motor_speed_ms = int(motor_speed_ms)
+        if self.motor_speed_ms != FIXED_STEP_DELAY_MS:
+            raise ValueError("Hardware motion is fixed at 0.02 RPM.")
         self.hold = bool(hold)
         self.x_sign = 1 if int(x_sign) >= 0 else -1
         self.y_sign = 1 if int(y_sign) >= 0 else -1
-        self.apply_backlash = bool(apply_backlash)
+        self.apply_backlash = False
         self._x_stepper = x_stepper
         self._y_stepper = y_stepper
         self._xy_stepper = xy_stepper
@@ -869,7 +872,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--stage-baud", type=int, default=115200)
     parser.add_argument("--stage-timeout-s", type=float, default=2.0)
     parser.add_argument("--stage-boot-wait-s", type=float, default=2.0)
-    parser.add_argument("--motor-speed-ms", type=int, default=8, help="Stepper firmware SPEED_MS value.")
+    parser.add_argument("--motor-speed-ms", type=int, default=FIXED_STEP_DELAY_MS, choices=[FIXED_STEP_DELAY_MS], help="Fixed 0.02 RPM compatibility delay; not an adjustable speed.")
     parser.add_argument("--x-sign", type=int, choices=(-1, 1), default=1, help="Invert X movement with -1 if needed.")
     parser.add_argument("--y-sign", type=int, choices=(-1, 1), default=1, help="Invert Y movement with -1 if needed.")
     parser.add_argument("--no-hold", action="store_true", help="Disable motor hold after connecting, if firmware supports HOLD.")

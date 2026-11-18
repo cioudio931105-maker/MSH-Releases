@@ -95,6 +95,8 @@ try {
         "msh_version.py" = (Join-Path $projectRoot "msh_version.py")
         "MSH.spec" = (Join-Path $projectRoot "MSH.spec")
         "msh_model_policy.py" = (Join-Path $projectRoot "msh_model_policy.py")
+        "msh_motion_policy.py" = (Join-Path $projectRoot "msh_motion_policy.py")
+        "msh_runtime.py" = (Join-Path $projectRoot "msh_runtime.py")
         "msh_distribution.py" = (Join-Path $projectRoot "msh_distribution.py")
         "LICENSE" = (Join-Path $projectRoot "LICENSE")
         "THIRD_PARTY_NOTICES.md" = (Join-Path $projectRoot "THIRD_PARTY_NOTICES.md")

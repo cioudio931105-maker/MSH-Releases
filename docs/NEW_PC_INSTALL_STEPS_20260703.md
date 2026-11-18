@@ -172,7 +172,7 @@ GPU 影像拼接：
 .\install_gui_shortcut.ps1
 ```
 
-`run_hardware_gui.bat` 保留為診斷模式。若日常捷徑啟動失敗，請先用診斷模式查看錯誤，並檢查 `logs/hardware_gui_startup.log`。移動或重新 clone 專案後，請重新執行捷徑安裝腳本。
+`run_hardware_gui.bat` 保留為診斷模式。若日常捷徑啟動失敗，請先用診斷模式查看錯誤，並檢查 `%LOCALAPPDATA%\MSH\msh.log` 與 `logs/hardware_gui_startup.log`。日常捷徑與診斷入口共用同一個啟動器及單一執行個體保護。移動或重新 clone 專案後，請重新執行捷徑安裝腳本。
 
 白血球蛇形掃描、偵測後暫停拍攝與繼續掃描：
 
