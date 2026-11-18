@@ -22,6 +22,7 @@ datas = [
     (str(ROOT / "assets" / "msh-cyberpunk-splash.png"), "assets"),
     (str(ROOT / "assets" / "msh-pixel-icon.ico"), "assets"),
     (str(ROOT / "assets" / "msh-pixel-icon.png"), "assets"),
+    (str(ROOT / "installer" / "run_update.ps1"), "installer"),
 ]
 for subtree in (
     "licenses",

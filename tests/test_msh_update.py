@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import unittest
+import json
+from pathlib import Path
 from unittest.mock import patch
 
-from msh_update import UpdateManifest, check_for_update, is_newer_version, parse_update_manifest
+from msh_update import (DEFAULT_UPDATE_MANIFEST_URL, RELEASE_REPOSITORY, UpdateCheckError,
+                        UpdateManifest, check_for_update, is_newer_version,
+                        parse_update_manifest, validate_installer_url)
 
 
 def _payload(**overrides):
@@ -32,6 +36,24 @@ class VersionComparisonTests(unittest.TestCase):
     def test_stable_release_is_newer_than_its_prerelease(self) -> None:
         self.assertTrue(is_newer_version("1.0.0", "1.0.0-rc.1"))
         self.assertTrue(is_newer_version("1.0.0-rc.2", "1.0.0-rc.1"))
+
+
+class UpdateSourceTests(unittest.TestCase):
+    def test_public_release_repository_is_the_only_default_source(self):
+        self.assertEqual(RELEASE_REPOSITORY, "cioudio931105-maker/MSH-Releases")
+        self.assertEqual(DEFAULT_UPDATE_MANIFEST_URL,
+                         "https://raw.githubusercontent.com/cioudio931105-maker/MSH-Releases/main/latest.json")
+
+    def test_private_development_repository_installers_are_rejected(self):
+        public_url = "https://github.com/cioudio931105-maker/MSH-Releases/releases/download/v1.0.0/MSH.exe"
+        self.assertEqual(validate_installer_url(public_url), public_url)
+        with self.assertRaises(UpdateCheckError):
+            validate_installer_url(public_url.replace("MSH-Releases", "Microscope-Scanner-Helper_MSH"))
+
+    def test_release_example_uses_the_same_public_source(self):
+        payload = json.loads((Path(__file__).resolve().parents[1] / "release/latest.example.json").read_text(encoding="utf-8"))
+        validate_installer_url(payload["download_url"])
+        self.assertTrue(payload["release_page_url"].startswith(f"https://github.com/{RELEASE_REPOSITORY}/releases/"))
 
 
 class ManifestValidationTests(unittest.TestCase):

@@ -22,7 +22,7 @@ EXCLUDED_PREFIXES = (
     "ultralytics/assets/", "matplotlib/mpl-data/sample_data/",
     "pypylon/pylondataprocessingplugins/", "pypylon/dataprocessingpluginsb/", "pypylon/docs/",
 )
-FIRST_PARTY_PREFIXES = ("cell_stitching_project/", "microscope_stitcher_project/", "msh_app/", "stitched_output/", "assets/", "licenses/")
+FIRST_PARTY_PREFIXES = ("cell_stitching_project/", "microscope_stitcher_project/", "msh_app/", "stitched_output/", "assets/", "licenses/", "installer/")
 SOURCE_SUBTREES = (
     "licenses",
     "microscope_stitcher_project",
@@ -89,6 +89,8 @@ def audit(app_dir: Path, source_root: Path) -> dict:
         relative = Path(source_name).relative_to(source_root)
         if not (internal / relative).is_file():
             issues.append(f"Expected application source/asset absent: {relative.as_posix()}")
+    if (source_root / 'installer/run_update.ps1').is_file() and not (internal / 'installer/run_update.ps1').is_file():
+        issues.append('Expected update handoff helper absent: installer/run_update.ps1')
     # The legacy snapshot predates the license bundle; new source trees require it.
     if (source_root / "LICENSE").is_file():
         if manifest.get("source_license") != "AGPL-3.0-only":

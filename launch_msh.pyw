@@ -9,7 +9,6 @@ import threading
 import time
 import traceback
 import math
-import webbrowser
 from pathlib import Path
 
 import tkinter as tk
@@ -24,91 +23,12 @@ from msh_runtime import (
     log_unhandled_exception,
 )
 from msh_version import __version__
-from msh_update import UpdateCheckError, UpdateManifest, check_for_update
+from msh_update_ui import install_help_menu
 
 PROJECT_ROOT = application_root()
 GUI_SCRIPT = PROJECT_ROOT / "msh_app" / "hardware" / "stepper_drag_gui.py"
 SPLASH_IMAGE = PROJECT_ROOT / "assets" / "msh-cyberpunk-splash-640.png"
 SOURCE_STARTUP_LOG = PROJECT_ROOT / "logs" / "hardware_gui_startup.log"
-
-
-def _format_update_message(manifest: UpdateManifest) -> str:
-    return (
-        f"目前版本：v{__version__}\n"
-        f"最新版本：v{manifest.version}\n"
-        f"發布日期：{manifest.published_at}\n\n"
-        f"{manifest.release_name}\n\n"
-        f"{manifest.release_notes}\n\n"
-        f"SHA-256：\n{manifest.sha256}\n\n"
-        "是否開啟瀏覽器下載新版安裝檔？\n"
-        "下載後可直接覆蓋安裝，不必先解除安裝舊版。"
-    )
-
-
-def _install_help_menu(root: tk.Tk) -> None:
-    logger = logging.getLogger("msh.update")
-    state = {"checking": False}
-
-    def finish_check(manual: bool, manifest: UpdateManifest | None, error: Exception | None) -> None:
-        state["checking"] = False
-        if error is not None:
-            logger.warning("Update check failed: %s", error)
-            if manual:
-                messagebox.showwarning("MSH 檢查更新", f"目前無法取得更新資訊。\n\n{error}", parent=root)
-            return
-        if manifest is None:
-            if manual:
-                messagebox.showinfo(
-                    "MSH 檢查更新",
-                    f"目前已是最新版本：v{__version__}",
-                    parent=root,
-                )
-            return
-        logger.info("MSH update available: %s -> %s", __version__, manifest.version)
-        if messagebox.askyesno("MSH 有可用更新", _format_update_message(manifest), parent=root):
-            if not webbrowser.open(manifest.download_url, new=2):
-                messagebox.showwarning(
-                    "MSH 下載更新",
-                    f"無法自動開啟瀏覽器，請前往：\n{manifest.release_page_url}",
-                    parent=root,
-                )
-
-    def start_check(manual: bool = True) -> None:
-        if state["checking"]:
-            if manual:
-                messagebox.showinfo("MSH 檢查更新", "正在檢查更新，請稍候。", parent=root)
-            return
-        state["checking"] = True
-
-        def worker() -> None:
-            manifest: UpdateManifest | None = None
-            error: Exception | None = None
-            try:
-                manifest = check_for_update(__version__)
-            except UpdateCheckError as exc:
-                error = exc
-            try:
-                root.after(0, finish_check, manual, manifest, error)
-            except tk.TclError:
-                logger.info("MSH closed before the update check completed")
-
-        threading.Thread(target=worker, name="msh-update-check", daemon=True).start()
-
-    menu_bar = tk.Menu(root)
-    help_menu = tk.Menu(menu_bar, tearoff=False)
-    help_menu.add_command(label="檢查更新...", command=start_check)
-    help_menu.add_separator()
-    help_menu.add_command(
-        label="關於 MSH",
-        command=lambda: messagebox.showinfo(
-            "關於 MSH",
-            f"Microscope Scanner Helper\n版本 v{__version__}",
-            parent=root,
-        ),
-    )
-    menu_bar.add_cascade(label="說明", menu=help_menu)
-    root.configure(menu=menu_bar)
-    root.after(3000, lambda: start_check(manual=False))
 
 
 def _center_window(window: tk.Tk, width: int, height: int) -> None:
@@ -176,8 +96,10 @@ def main() -> None:
     completed = threading.Event()
     threading.Thread(target=_load_gui_module, args=(result, completed), daemon=True).start()
     started = time.monotonic()
+    update_controller = None
 
     def show_gui() -> None:
+        nonlocal update_controller
         error = result.get("error")
         if error:
             root.destroy()
@@ -194,8 +116,8 @@ def main() -> None:
             child.destroy()
         root.overrideredirect(False)
         root.attributes("-topmost", False)
-        gui_class(root=root)
-        _install_help_menu(root)
+        gui = gui_class(root=root)
+        update_controller = install_help_menu(root, gui)
         root.update_idletasks()
         root.attributes("-alpha", 1.0)
         root.deiconify()
@@ -220,6 +142,12 @@ def main() -> None:
     root.after(0, animate)
     root.mainloop()
     instance_lock.close()
+    if update_controller is not None:
+        try:
+            update_controller.handoff_after_close()
+        except Exception:
+            logging.getLogger("msh.update").exception("Update installer handoff failed")
+            messagebox.showerror("MSH 更新", "未能啟動安裝程式。已下載檔案仍保留，可稍後重試。")
 
 
 if __name__ == "__main__":

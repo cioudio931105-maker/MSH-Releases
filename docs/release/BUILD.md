@@ -10,9 +10,9 @@ For the complete owner/end-user lifecycle, see
 - PyInstaller 6 and Inno Setup 6
 
 Use a clean, tested Python 3.12 environment. Do not build from Conda base or
-rely on a developer PATH. CPU is the default public build because it works on
-computers without NVIDIA CUDA. Keep CPU and GPU dependencies in separate
-environments.
+rely on a developer PATH. The online installer prefers NVIDIA GPU and offers CPU fallback.
+Keep CPU and GPU dependencies in separate environments. Use an explicit runtime in
+package-build commands for clarity. See [the current online flow](../ONLINE_INSTALL_AND_UPDATE_zh_TW.md).
 
 The source-review snapshot records the tested build environment in
 `requirements-release-v0.1.4.txt`. It is an installed-version inventory, not a
@@ -53,21 +53,30 @@ other rather than creating two conflicting MSH installations.
 
 ## Client review update manifest
 
-MSH checks the public release-only manifest configured in `msh_update.py`. Do
-not point client builds at a private repository and never embed a GitHub token
+MSH reads the public `MSH-Releases/main/latest.json` manifest configured in `msh_update.py`.
+The development repository and its research history stay private. Do
+not ship public client builds pointing at an inaccessible private repository, and never embed a GitHub token
 in the application. Start from `release/latest.example.json`, then for every
 review release:
 
 1. Build the final installer.
 2. Generate its SHA-256 checksum.
-3. Upload the installer and checksum to the public release-only repository.
+3. Upload reviewed installers, checksums and required source/license delivery materials to `cioudio931105-maker/MSH-Releases` Releases. Do not transfer the private repository history or research data.
 4. Replace every example value, especially `version`, URLs, `sha256`, release
    notes, and date.
 5. Publish the completed file as `latest.json` only after the installer asset is
    available at its HTTPS URL.
 
-The updater only opens the download after user confirmation. It does not execute
-the unsigned installer or replace running application files.
+After user confirmation the updater downloads a repository Release installer and verifies
+SHA-256. It offers installation only after work is finished and devices are disconnected.
+A helper waits for normal MSH exit, rechecks the hash and opens interactive Setup.
+It never force-kills the app or bypasses Windows installer/signature policy.
+Private/offline access failures do not prevent using the current application.
+
+The source is now `0.1.5-dev.3`; the existing `dev.2` candidate binaries retain
+their earlier endpoint and are not rewritten. Rebuild CPU, GPU and online packages
+before using the new endpoint. The online builder checks `msh_update.py` provenance
+as well as bootstrapper sources to reject mixed endpoint configurations.
 
 Do not run `ISCC.exe` directly for a release. Only `scripts\build_release.ps1` creates
 the build manifest and guarantees that the installer source came from the same fresh
@@ -111,3 +120,15 @@ This is a payload check, not clean-machine installation or hardware acceptance.
 
 Never run motor, XY-stage, or camera-motion validation merely to test packaging.
 Those tests require an authorised B-site hardware session.
+
+## Combined build and cross-repository delivery
+
+Use [the automated release workflow](../AUTOMATED_RELEASE_zh_TW.md) for the complete path.
+`scripts/release_pipeline.py build --candidate` tests and builds both runtimes,
+audits each fresh payload, runs its software-only environment report and assembles
+the online installer plus a verified source/delivery bundle. It preserves previous
+local payloads and refuses to overwrite installers or delivery directories.
+Pinned CPU/GPU requirements are independent; no environment directory is copied.
+GitHub Actions prepares a private artifact first. A separate explicit publish run
+uses the reviewed artifact, uploads only approved assets, verifies anonymous access,
+and writes the public main/latest.json last. It does not copy private Git history.

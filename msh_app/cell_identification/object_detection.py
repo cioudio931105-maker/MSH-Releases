@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from msh_model_policy import require_local_model
+from msh_environment import inference_device
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -115,7 +116,8 @@ class WBCSubtypeClassifier:
     def classify(self, crop_bgr: np.ndarray) -> tuple[str, float] | None:
         if crop_bgr.size == 0:
             return None
-        results = self._model.predict(source=crop_bgr, conf=max(0.01, self.min_confidence), verbose=False)
+        results = self._model.predict(source=crop_bgr, conf=max(0.01, self.min_confidence), verbose=False,
+                                      device=inference_device())
         if not results:
             return None
         result = results[0]
@@ -197,6 +199,7 @@ class ObjectDetector:
             iou=self.iou_threshold,
             max_det=self.max_det,
             verbose=False,
+            device=inference_device(),
         )
         if not results:
             return []

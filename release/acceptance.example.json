@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "version": "REPLACE_WITH_REVIEWED_STABLE_VERSION",
+  "source_commit": "REPLACE_WITH_EXACT_TESTED_SOURCE_COMMIT",
+  "checks": {
+    "windows_10": {"status": "pending", "evidence": ""},
+    "windows_11": {"status": "pending", "evidence": ""},
+    "b_site_hardware": {"status": "pending", "evidence": ""},
+    "redistribution_and_source": {"status": "pending", "evidence": ""}
+  }
+}

@@ -22,6 +22,14 @@ def worker_command(name: str) -> list[str]:
 
 
 def dispatch_worker(arguments: list[str]) -> bool:
+    if arguments and arguments[0] == '--msh-environment-report':
+        if len(arguments) != 2:
+            raise ValueError('Environment report requires exactly one output path')
+        # Software-only acceptance entry; never constructs a GUI/camera/motor object.
+        from msh_environment import environment_report
+        configure_runtime_environment()
+        Path(arguments[1]).write_text(environment_report() + '\n', encoding='utf-8')
+        return True
     if not arguments or arguments[0] != '--msh-worker':
         return False
     if len(arguments) < 2 or arguments[1] not in WORKER_SCRIPTS:

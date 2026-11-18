@@ -1,13 +1,16 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$PythonPath = "",
     [ValidateSet("cpu", "gpu")]
     [string]$Runtime = "cpu",
     [switch]$Candidate,
-    [switch]$SkipInstaller
+    [switch]$SkipInstaller,
+    [switch]$SkipLocalPayloadCopy
 )
 
 $ErrorActionPreference = "Stop"
+Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Utility\Microsoft.PowerShell.Utility.psd1') -ErrorAction Stop
+if ($SkipInstaller -and $SkipLocalPayloadCopy) { throw 'SkipInstaller cannot be combined with SkipLocalPayloadCopy.' }
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $pythonCandidates = @(
     $PythonPath,
@@ -61,6 +64,11 @@ function Remove-GeneratedDirectory([string]$Path, [string]$AllowedParent) {
 
 Push-Location -LiteralPath $projectRoot
 try {
+    $initialCommit = (& git -C $projectRoot rev-parse HEAD).Trim()
+    $sourceNames = @((& $python scripts/audit_application_files.py --list --json | ConvertFrom-Json) | Sort-Object)
+    if ($LASTEXITCODE -ne 0 -or $sourceNames.Count -eq 0) { throw 'Cannot inventory build sources.' }
+    $applicationSourceHashes = [ordered]@{}
+    foreach ($name in $sourceNames) { $applicationSourceHashes[$name] = Get-Sha256 (Join-Path $projectRoot $name) }
     # Build into a new directory.  Never let Inno Setup consume a previous
     # dist\<runtime>\MSH tree after a failed or skipped PyInstaller build.
     New-Item -ItemType Directory -Force -Path $stagingRoot | Out-Null
@@ -81,6 +89,14 @@ try {
     if ($LASTEXITCODE -ne 0 -or $gitCommit -notmatch '^[0-9a-f]{40}$') {
         throw "無法取得目前 Git commit；拒絕建立無法追溯的發行包。"
     }
+    if ($gitCommit -ne $initialCommit) { throw 'Source HEAD changed during packaging.' }
+    $finalNames = @((& $python scripts/audit_application_files.py --list --json | ConvertFrom-Json) | Sort-Object)
+    if (($sourceNames -join "`n") -ne ($finalNames -join "`n")) { throw 'Source paths changed during packaging.' }
+    foreach ($name in $sourceNames) {
+        if ($applicationSourceHashes[$name] -ne (Get-Sha256 (Join-Path $projectRoot $name))) {
+            throw "Source changed during packaging: $name"
+        }
+    }
     $gitDirtyPaths = @(& git -C $projectRoot status --porcelain)
     if ($LASTEXITCODE -ne 0) { throw "無法讀取 Git 工作樹狀態；拒絕建立無法追溯的發行包。" }
     $releaseTag = "v$version"
@@ -98,6 +114,22 @@ try {
         "msh_motion_policy.py" = (Join-Path $projectRoot "msh_motion_policy.py")
         "msh_runtime.py" = (Join-Path $projectRoot "msh_runtime.py")
         "msh_workers.py" = (Join-Path $projectRoot "msh_workers.py")
+        "msh_update.py" = (Join-Path $projectRoot "msh_update.py")
+        "msh_update_ui.py" = (Join-Path $projectRoot "msh_update_ui.py")
+        "msh_update_safety.py" = (Join-Path $projectRoot "msh_update_safety.py")
+        "msh_environment.py" = (Join-Path $projectRoot "msh_environment.py")
+        "installer/run_update.ps1" = (Join-Path $projectRoot "installer\run_update.ps1")
+        "installer/MSH.iss" = (Join-Path $projectRoot "installer\MSH.iss")
+        "installer/MSH_Online.iss" = (Join-Path $projectRoot "installer\MSH_Online.iss")
+        "scripts/build_online_installer.py" = (Join-Path $projectRoot "scripts\build_online_installer.py")
+        "scripts/build_release.ps1" = (Join-Path $projectRoot "scripts\build_release.ps1")
+        "scripts/release_bundle.py" = (Join-Path $projectRoot "scripts\release_bundle.py")
+        "scripts/publish_release.py" = (Join-Path $projectRoot "scripts\publish_release.py")
+        "scripts/release_pipeline.py" = (Join-Path $projectRoot "scripts\release_pipeline.py")
+        "scripts/ci_release.py" = (Join-Path $projectRoot "scripts\ci_release.py")
+        ".github/workflows/release.yml" = (Join-Path $projectRoot ".github\workflows\release.yml")
+        "requirements-release-cpu.txt" = (Join-Path $projectRoot "requirements-release-cpu.txt")
+        "requirements-release-gpu.txt" = (Join-Path $projectRoot "requirements-release-gpu.txt")
         "msh_distribution.py" = (Join-Path $projectRoot "msh_distribution.py")
         "LICENSE" = (Join-Path $projectRoot "LICENSE")
         "THIRD_PARTY_NOTICES.md" = (Join-Path $projectRoot "THIRD_PARTY_NOTICES.md")
@@ -126,6 +158,7 @@ try {
         torch_version = (& $python -c "import torch; print(torch.__version__)").Trim()
         app_exe_sha256 = Get-Sha256 $packagedApp
         source_sha256 = $sourceHashes
+        application_source_sha256 = $applicationSourceHashes
         model_distribution = "user-supplied"
         bundled_models = @()
         bundled_research_data = $false
@@ -135,13 +168,32 @@ try {
     $buildManifestPath = Join-Path $stagingApp $buildManifestName
     $buildManifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $buildManifestPath -Encoding utf8
 
+    & $python scripts/audit_packaged_application.py --app-dir $stagingApp --source-root $projectRoot
+    if ($LASTEXITCODE -ne 0) { throw 'Fresh payload audit failed.' }
+    $softwareReport = Join-Path $stagingRoot 'software-environment.md'
+    $oldLocalData = $env:LOCALAPPDATA
+    $oldYoloConfig = $env:YOLO_CONFIG_DIR
+    try {
+        $env:LOCALAPPDATA = Join-Path $stagingRoot 'profile'
+        $env:YOLO_CONFIG_DIR = Join-Path $stagingRoot 'profile\ultralytics'
+        $reportProcess = Start-Process -FilePath $packagedApp -ArgumentList @('--msh-environment-report', ('"{0}"' -f $softwareReport)) -PassThru -WindowStyle Hidden
+        if (-not $reportProcess.WaitForExit(120000)) { throw 'Frozen software report timed out; no installer was created.' }
+        $reportProcess.Refresh()
+        if ($reportProcess.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $softwareReport)) { throw 'Frozen software report failed.' }
+    } finally {
+        $env:LOCALAPPDATA = $oldLocalData
+        $env:YOLO_CONFIG_DIR = $oldYoloConfig
+    }
+
     # Publish only a successful fresh build for local smoke tests.  This is a
     # generated, ignored directory; it is never an input to the installer.
-    Remove-GeneratedDirectory $publishedApp (Join-Path $projectRoot $distPath)
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $publishedApp) | Out-Null
-    Copy-Item -LiteralPath $stagingApp -Destination $publishedApp -Recurse
-    if ((Get-Sha256 (Join-Path $publishedApp $buildManifestName)) -ne (Get-Sha256 $buildManifestPath)) {
-        throw "發行 payload 複製後的建置證據不一致。"
+    if (-not $SkipLocalPayloadCopy) {
+        Remove-GeneratedDirectory $publishedApp (Join-Path $projectRoot $distPath)
+        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $publishedApp) | Out-Null
+        Copy-Item -LiteralPath $stagingApp -Destination $publishedApp -Recurse
+        if ((Get-Sha256 (Join-Path $publishedApp $buildManifestName)) -ne (Get-Sha256 $buildManifestPath)) {
+            throw "發行 payload 複製後的建置證據不一致。"
+        }
     }
     if ($SkipInstaller) {
         Write-Host "Packaged application: $publishedApp"
@@ -161,13 +213,17 @@ try {
         ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
     }
     if (-not $isccPath) { throw "找不到 Inno Setup 6 (ISCC.exe)。請安裝 Inno Setup 後重新執行。" }
-    & $isccPath "/DMyAppVersion=$version" "/DMyBuildDir=$stagingApp" "/DMyBuildSuffix=$runtimeLabel" "installer\MSH.iss"
+    # Keep both modes below GitHub's 2 GiB asset limit; the fast dictionary is too small for CUDA DLLs.
+    $compression = 'lzma2/max'
+    & $isccPath "/DMyAppVersion=$version" "/DMyBuildDir=$stagingApp" "/DMyBuildSuffix=$runtimeLabel" "/DMyCompression=$compression" "installer\MSH.iss"
     if ($LASTEXITCODE -ne 0) { throw "Inno Setup 建置失敗。" }
 
     if (-not (Test-Path -LiteralPath $installer -PathType Leaf)) { throw "找不到預期的安裝檔：$installer" }
+    if ((Get-Item -LiteralPath $installer).Length -ge 2GB) { throw 'Installer exceeds the GitHub Release asset limit; preserve it for diagnosis and rebuild with a new version.' }
     $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
     Set-Content -LiteralPath "$installer.sha256" -Value "$hash *$(Split-Path -Leaf $installer)" -Encoding ascii
     Copy-Item -LiteralPath $buildManifestPath -Destination "$installer.build-manifest.json" -Force
+    Copy-Item -LiteralPath $softwareReport -Destination "$installer.environment.md"
     Write-Host "Installer: $installer"
     Write-Host "Checksum: $installer.sha256"
     Write-Host "Build manifest: $installer.build-manifest.json"

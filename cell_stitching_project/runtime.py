@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import cv2
+from msh_environment import probe_compute
 
 
 @dataclass(slots=True)
@@ -132,7 +133,7 @@ def probe_runtime(
     runtime.torch_available = torch_module is not None
     if torch_module is not None:
         try:
-            runtime.cuda_available = bool(torch_module.cuda.is_available())
+            runtime.cuda_available = probe_compute(torch_module).device.startswith("cuda")
         except Exception:
             runtime.cuda_available = False
         if runtime.cuda_available:
