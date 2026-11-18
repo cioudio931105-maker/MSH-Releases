@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "version": "0.1.1",
+  "release_name": "MSH v0.1.1 委託方檢閱版",
+  "release_notes": "請在這裡填寫委託方需要知道的更新內容。",
+  "download_url": "https://github.com/cioudio931105-maker/MSH-Releases/releases/download/v0.1.1/MSH_Setup_v0.1.1_CPU.exe",
+  "release_page_url": "https://github.com/cioudio931105-maker/MSH-Releases/releases/tag/v0.1.1",
+  "sha256": "REPLACE_WITH_THE_64_CHARACTER_SHA256_AFTER_BUILDING_THE_INSTALLER",
+  "published_at": "2026-08-21"
+}

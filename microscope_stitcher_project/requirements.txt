@@ -1,0 +1,6 @@
+numpy>=1.26
+opencv-contrib-python>=4.8
+tifffile>=2024.2
+PyYAML>=6.0
+tqdm>=4.66
+scipy>=1.11

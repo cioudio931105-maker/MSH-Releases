@@ -1,0 +1,13 @@
+MSH v0.1.1 is the first formal release candidate for client review. It has not
+been publicly released or code-signed. Windows or antivirus software may show
+an unknown-publisher warning.
+
+MSH runs locally and does not upload microscope images, CSV, JSON, or scan data.
+
+For Basler cameras, install the official Basler pylon Runtime/driver for the
+camera interface before using camera features. This application does not modify
+COM ports, motor parameters, scan bounds, camera serial numbers, or PFS profiles.
+
+This review build includes the approved WBC-only detection model
+`wbc_focus_yolov8n_e_20260611.pt`. It draws WBC bounding boxes but does not
+classify WBC subtypes and must not be treated as clinical validation.

@@ -1,0 +1,321 @@
+Cell Project 完整交付與新電腦 GPU 安裝步驟
+==========================================
+
+目的
+----
+這份文件是最精簡但完整的交付流程，包含：
+1. 舊電腦打包專案
+2. 新電腦解壓專案
+3. 安裝 GPU 可用環境
+4. Basler Pylon Viewer 已安裝 / 未安裝的處理方式
+5. 安裝後驗證
+6. 後續更新
+7. 常見錯誤排查
+
+
+一、舊電腦打包專案
+------------------
+在原本可以正常使用專案的電腦上，打開 PowerShell，執行：
+
+cd C:\Cell_Project\Cell_Project
+Set-ExecutionPolicy -Scope Process Bypass
+.\package_for_transfer.ps1 -Destination "D:\Cell_Project_delivery_20260408.zip" -IncludeModels -IncludeStitchedOutput
+
+成功時會看到類似：
+
+Archive created: D:\Cell_Project_delivery_20260408.zip
+
+確認壓縮檔存在：
+
+Test-Path "D:\Cell_Project_delivery_20260408.zip"
+
+如果回傳 True，代表打包成功。
+
+交付給新電腦的檔案就是：
+
+D:\Cell_Project_delivery_20260408.zip
+
+
+二、新電腦安裝前確認
+--------------------
+新電腦需要：
+
+1. Windows 10 / Windows 11 64-bit
+2. 可以連上網路
+3. NVIDIA 顯示卡驅動已安裝
+4. 如果要接 Basler 相機，建議已安裝 Basler Pylon Viewer / Pylon 7
+
+注意：
+不需要另外手動安裝 CUDA Toolkit 或 cuDNN。
+專案安裝腳本會透過 PyTorch wheel 自動安裝對應 CUDA runtime。
+新電腦只需要 NVIDIA 顯示卡驅動正常。
+
+
+三、確認 NVIDIA GPU 驅動
+------------------------
+在新電腦打開 PowerShell，執行：
+
+nvidia-smi
+
+如果看到顯卡名稱與 Driver Version，代表 NVIDIA 驅動正常。
+
+如果出現找不到 nvidia-smi，請先安裝 NVIDIA 官方顯示卡驅動，
+安裝完成後重新開機，再重新執行 nvidia-smi。
+
+
+四、解壓專案
+------------
+將壓縮檔：
+
+Cell_Project_delivery_20260408.zip
+
+解壓到新電腦，例如：
+
+D:\Cell_Project
+
+請確認進入的資料夾內看得到：
+
+install_project.ps1
+setup_gpu_env.ps1
+update_project.ps1
+package_for_transfer.ps1
+cell_stitching_project
+docs
+
+確認方式：
+
+cd D:\Cell_Project
+Test-Path .\install_project.ps1
+
+如果回傳 True，代表目前位置正確。
+
+如果回傳 False，代表你沒有進到正確資料夾。
+請進入真正包含 install_project.ps1 的那一層。
+
+
+五、安裝專案 GPU 環境
+---------------------
+在新電腦的專案資料夾內執行：
+
+Set-ExecutionPolicy -Scope Process Bypass
+.\install_project.ps1 -RequireCuda
+
+建議正式安裝使用 -RequireCuda。
+這樣如果 GPU 沒有成功啟用，安裝會直接報錯，不會默默退回 CPU。
+
+安裝腳本會自動處理：
+
+1. 尋找或安裝 Miniconda
+2. 建立 .conda-gpu Python 環境
+3. 偵測 NVIDIA GPU
+4. 自動嘗試 PyTorch CUDA runtime
+5. 如果 cu124 不適合，會自動 fallback 到 cu118
+6. 安裝 OpenCV、PyTorch、Ultralytics、SSD、ONNX、pypylon 等套件
+7. 執行專案環境驗證
+
+如果只是先測試專案，不強制 GPU，也可以執行：
+
+.\install_project.ps1
+
+
+六、Basler Pylon Viewer 已經安裝的情況
+--------------------------------------
+如果新電腦已經安裝 Basler Pylon Viewer / Pylon 7，
+安裝專案時不需要加 -PylonInstallerPath。
+
+直接執行：
+
+.\install_project.ps1 -RequireCuda
+
+可以用以下指令確認是否已安裝 Basler：
+
+Test-Path "C:\Program Files\Basler"
+
+如果回傳 True，再執行：
+
+Get-ChildItem "C:\Program Files\Basler"
+
+如果看到 pylon 7 或類似資料夾，代表 Basler Pylon 已安裝。
+
+
+七、Basler Pylon Viewer 尚未安裝的情況
+--------------------------------------
+如果新電腦要接 Basler 相機，請先下載 Basler 官方 Pylon Viewer /
+Pylon Camera Software Suite 安裝包。
+
+下載完成後，假設安裝檔位置是：
+
+C:\Users\使用者名稱\Downloads\pylon_xxx.exe
+
+可以這樣執行：
+
+.\install_project.ps1 -RequireCuda -PylonInstallerPath "C:\Users\使用者名稱\Downloads\pylon_xxx.exe"
+
+注意：
+-PylonInstallerPath 後面必須是真實存在的 exe 檔案路徑。
+如果路徑不存在，就會出現找不到檔案的錯誤。
+
+如果暫時不接 Basler 相機，可以先跳過：
+
+.\install_project.ps1 -RequireCuda -SkipPylon
+
+之後需要相機時，再另外安裝 Basler Pylon Viewer 即可。
+
+
+八、安裝後驗證 GPU
+------------------
+在新電腦專案資料夾執行：
+
+.\.conda-gpu\python.exe -c "import torch; print(torch.__version__); print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NO CUDA')"
+
+成功時應該看到：
+
+True
+NVIDIA GeForce ...
+
+如果看到 False 或 NO CUDA，代表 GPU 尚未成功啟用。
+
+
+九、安裝後驗證 Basler Python 介面
+--------------------------------
+如果新電腦要接 Basler 相機，執行：
+
+.\.conda-gpu\python.exe -c "import pypylon; print('pypylon OK')"
+
+如果看到：
+
+pypylon OK
+
+代表 Python 環境可以載入 Basler 介面。
+
+如果要確認實體相機是否正常，請打開 Basler Pylon Viewer，
+確認 Pylon Viewer 可以看到並開啟相機。
+
+
+十、執行專案完整環境驗證
+------------------------
+在新電腦專案資料夾執行：
+
+.\.conda-gpu\python.exe -m cell_stitching_project.verify_environment --workspace-root . --require-cuda
+
+如果最後看到：
+
+overall: PASS
+
+代表主要軟體環境驗證通過。
+
+
+十一、執行測試
+--------------
+如果要進一步確認專案程式測試也通過，執行：
+
+.\.conda-gpu\python.exe -m unittest discover -s tests -v
+
+如果最後看到：
+
+OK
+
+代表目前測試集通過。
+
+注意：
+測試通過代表軟體功能鏈正常。
+Basler 實體相機與馬達仍需要接上硬體後另外做現場驗證。
+
+
+十二、後續更新專案
+------------------
+情況 A：用新版 zip 覆蓋更新
+
+1. 關閉正在執行的專案程式
+2. 用新版專案檔案覆蓋原資料夾
+3. 在專案資料夾執行：
+
+.\update_project.ps1 -RequireCuda
+
+情況 B：用 Git 更新
+
+在專案資料夾執行：
+
+.\update_project.ps1 -Pull -RequireCuda
+
+更新腳本會重新檢查依賴，並保持 GPU runtime 可用。
+
+
+十三、最短正式安裝指令
+----------------------
+如果新電腦已經：
+1. 安裝 NVIDIA 驅動
+2. nvidia-smi 正常
+3. 已經解壓專案到 D:\Cell_Project
+4. Basler Pylon Viewer 已安裝或暫時不需要相機
+
+直接依序執行：
+
+cd D:\Cell_Project
+Set-ExecutionPolicy -Scope Process Bypass
+.\install_project.ps1 -RequireCuda
+.\.conda-gpu\python.exe -c "import torch; print(torch.cuda.is_available()); print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'NO CUDA')"
+.\.conda-gpu\python.exe -m cell_stitching_project.verify_environment --workspace-root . --require-cuda
+
+
+十四、常見錯誤排查
+------------------
+問題：PowerShell 顯示找不到 .\install_project.ps1
+原因：目前不在專案根目錄。
+處理：
+cd D:\Cell_Project
+Test-Path .\install_project.ps1
+
+問題：PowerShell 不允許執行 ps1
+處理：
+Set-ExecutionPolicy -Scope Process Bypass
+
+問題：nvidia-smi 找不到
+原因：NVIDIA 驅動未安裝或未正常載入。
+處理：安裝 NVIDIA 官方顯示卡驅動，重新開機。
+
+問題：torch.cuda.is_available() 是 False
+原因：顯卡驅動太舊、驅動異常，或 CUDA runtime 不適合。
+處理：
+1. 更新 NVIDIA 驅動
+2. 重新開機
+3. 執行 .\update_project.ps1 -RequireCuda
+
+問題：找不到 C:\Installers\Basler_pylon.exe
+原因：這只是範例路徑，該檔案不存在。
+處理：
+1. 如果已經安裝 Pylon Viewer，不要使用 -PylonInstallerPath
+2. 如果尚未安裝，先下載 Basler 官方 Pylon 安裝檔
+3. 將 -PylonInstallerPath 改成實際存在的 exe 路徑
+
+問題：pypylon OK，但 Pylon Viewer 看不到相機
+原因：這通常是硬體、線材、驅動、相機供電或相機權限問題。
+處理：
+1. 確認 USB / 網路線連接
+2. 確認相機供電
+3. 先用 Pylon Viewer 確認可開啟相機
+4. 再回到專案測試相機功能
+
+問題：安裝中途失敗或中斷
+處理：
+1. 不要手動刪除整個專案
+2. 回到專案資料夾
+3. 執行 .\update_project.ps1 -RequireCuda
+4. 如果仍失敗，保留 PowerShell 最後 20 行錯誤訊息回報
+
+
+十五、交付時應包含
+------------------
+交付給客戶或同事時，至少提供：
+
+1. Cell_Project_delivery_20260408.zip
+2. 本文件：docs\COMPLETE_DELIVERY_AND_INSTALL_STEPS.txt
+3. 如果新電腦沒有 Basler Pylon Viewer，另外提供 Basler 官方安裝檔或下載連結
+
+正式現場驗收建議檢查：
+
+1. nvidia-smi 正常
+2. torch.cuda.is_available() 是 True
+3. verify_environment 顯示 overall: PASS
+4. 如果接 Basler 相機，Pylon Viewer 可以看到相機
+5. 如果接馬達控制板，確認序列埠與馬達移動正常

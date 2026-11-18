@@ -1,0 +1,301 @@
+# Microscope-Scanner-Helper_MSH
+# Generated data and large research artifacts must be preserved externally.
+# Do not delete files merely because they are ignored by Git.
+
+# ----------------------------------------------------------------------
+# Python / Conda virtual environments
+# ----------------------------------------------------------------------
+.venv/
+.venv*/
+venv/
+env/
+ENV/
+.conda/
+.conda-*/
+conda-env/
+pip-wheel-metadata/
+
+# ----------------------------------------------------------------------
+# Python caches and tooling
+# ----------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.ipynb_checkpoints/
+
+# ----------------------------------------------------------------------
+# Local editor, IDE and user-specific state
+# ----------------------------------------------------------------------
+.vscode/
+.idea/
+*.code-workspace
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.agents/
+.cell_project_install.json
+.matplotlib/
+.ultralytics/
+
+# ----------------------------------------------------------------------
+# Logs, caches and temporary files
+# ----------------------------------------------------------------------
+*.log
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*.cache
+*.pid
+*.lock
+~$*
+tmp/
+temp/
+cache/
+.cache/
+
+# ----------------------------------------------------------------------
+# Local secrets and credentials
+# ----------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+credentials.json
+credentials*.json
+secrets.json
+secrets*.json
+*secret*.txt
+*token*.txt
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# ----------------------------------------------------------------------
+# Build, package and distribution artifacts
+# ----------------------------------------------------------------------
+build/
+dist/
+site/
+*.egg-info/
+.eggs/
+wheels/
+*.whl
+*.spec.bak
+*.exe
+*.msi
+*.dmg
+*.AppImage
+Cell_Project_portable_*.zip
+
+# ----------------------------------------------------------------------
+# Root runtime output and training runs
+# ----------------------------------------------------------------------
+/output/
+/session_output/
+/staging/
+/runs/
+/backups/
+
+# ----------------------------------------------------------------------
+# Project runtime output
+# Keep placeholder files where the source tree requires the directories.
+# ----------------------------------------------------------------------
+/cell_stitching_project/output/**
+!/cell_stitching_project/output/.gitkeep
+/cell_stitching_project/debug/**
+!/cell_stitching_project/debug/.gitkeep
+
+# ----------------------------------------------------------------------
+# Standalone/offline analysis generated artifacts
+# Source code under offline_cell_analysis remains eligible for Git.
+# ----------------------------------------------------------------------
+/offline_cell_analysis/build/
+/offline_cell_analysis/dist/
+/offline_cell_analysis/OfflineCellAnalysis_*_dir/
+/offline_cell_analysis/outputs/
+/offline_cell_analysis/output/
+/offline_cell_analysis/cropped_cells/
+/offline_cell_analysis/cropped_cells_single/
+/offline_cell_analysis/training_datasets/
+/offline_cell_analysis/videos/
+/offline_cell_analysis/detections/**
+!/offline_cell_analysis/detections/.gitkeep
+/offline_cell_analysis/extracted_frames/**
+!/offline_cell_analysis/extracted_frames/.gitkeep
+
+# ----------------------------------------------------------------------
+# Large datasets
+# Preserve these outside ordinary Git; do not delete them.
+# ----------------------------------------------------------------------
+/datasets/
+/dataset/
+/data/raw/
+/data/datasets/
+/data/training/
+/data/validation/
+
+# Dataset copies embedded in project trees
+/cell_stitching_project/data/**
+!/cell_stitching_project/data/.gitkeep
+
+# ----------------------------------------------------------------------
+# Model weights and checkpoints
+# Preserve externally or manage through an explicitly approved LFS policy.
+# ----------------------------------------------------------------------
+*.pt
+*.pth
+*.ckpt
+*.weights
+*.onnx
+*.engine
+*.tflite
+*.pb
+*.h5
+*.keras
+*.safetensors
+*.bin
+*.omc
+*.caffemodel
+
+# MSH distributes application code only; preserve all research records locally.
+*.csv
+*.tsv
+*.jsonl
+*.parquet
+*.npy
+*.npz
+*.pkl
+*.pickle
+*.pfs
+*.jpg
+*.jpeg
+*.bmp
+*.tif
+*.tiff
+*.webp
+*.png
+!/assets/**/*.png
+*.json
+!/latest.json
+!/release/latest.example.json
+!/release/acceptance.example.json
+!/release/acceptance.json
+/microscope_stitcher_project/reference/
+/cell_stitching_project/ssd/vision/test/assets/
+/reports/
+MSH_portable_*.zip
+**/images/
+**/labels/
+**/weights/
+*.dcm
+*.svs
+*.yaml
+*.yml
+!/.github/workflows/release.yml
+*.xml
+*.txt
+!requirements*.txt
+!**/requirements*.txt
+!/docs/*.txt
+!/installer/PREREQUISITES.txt
+!/cell_stitching_project/ssd/THIRD_PARTY_LICENSE_pytorch_ssd.txt
+!/licenses/**/LICENSE*
+!/licenses/**/COPYING*
+!/licenses/**/NOTICE*
+!/licenses/**/AUTHORS*
+
+# ----------------------------------------------------------------------
+# Large generated media
+# Research images are excluded above; only application UI assets are exempt.
+# ----------------------------------------------------------------------
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.wmv
+*.webm
+*.m4v
+
+# Generated document-review renderings
+/reports/docx_review/
+/reports/docx_review_pages/
+/reports/docx_review_contact/
+/reports/docx_review_text/
+
+# Generated report documents and media at the reports root
+/reports/*.docx
+/reports/*.png
+/reports/*.jpg
+/reports/*.jpeg
+/reports/*.pdf
+
+# ----------------------------------------------------------------------
+# stitched_output mixed legacy tree
+#
+# IMPORTANT:
+# Do not ignore /stitched_output/ as a whole. It contains legacy source,
+# GUI, Arduino/XY hardware code, camera configuration and documentation.
+# ----------------------------------------------------------------------
+
+# Outer runtime results
+/stitched_output/CON
+/stitched_output/captured_steps/
+/stitched_output/output/
+/stitched_output/runs/
+
+# Intermediate nested runtime results
+/stitched_output/stitched_output/captured_steps/
+/stitched_output/stitched_output/output/
+/stitched_output/stitched_output/runs/
+/stitched_output/stitched_output/stitch_log.txt
+
+# Nested legacy runtime/data/model results
+/stitched_output/stitched_output/stitched_output/1/
+/stitched_output/stitched_output/stitched_output/captured/
+/stitched_output/stitched_output/stitched_output/captured_steps/
+/stitched_output/stitched_output/stitched_output/data/
+/stitched_output/stitched_output/stitched_output/experiments/
+/stitched_output/stitched_output/stitched_output/models/
+/stitched_output/stitched_output/stitched_output/output/
+/stitched_output/stitched_output/stitched_output/outputs/
+/stitched_output/stitched_output/stitched_output/runs/
+/stitched_output/stitched_output/stitched_output/stitched_results/
+/stitched_output/stitched_output/stitched_output/scripts/stitch_log.txt
+/stitched_output/stitched_output/stitched_output/stitch_log.txt
+
+# Legacy generated logs/caches, regardless of location
+/stitched_output/**/__pycache__/
+/stitched_output/**/*.pyc
+/stitched_output/**/*.log
+/stitched_output/**/*.cache
+
+# ----------------------------------------------------------------------
+# Operating-system files
+# ----------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Local migration records / external workstate; never public Git content
+/.migration-local/
