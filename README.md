@@ -34,6 +34,7 @@ MSH 提供操作介面與功能，**模型及研究資料由使用者自行提�
 - [純應用程式／資料政策](docs/APPLICATION_ONLY_POLICY.md)
 - [安裝版建置](docs/release/BUILD.md) · [發行檢查表](docs/release/RELEASE_CHECKLIST.md)
 - [舊版 README 快照](docs/legacy/README_BEFORE_CORE_ISOLATION.md)
+- [醫師影像交接 V1（歷史流程）](docs/PHYSICIAN_IMAGE_REVIEW_HANDOFF_V1_zh_TW.md)
 
 來源捷徑使用 `pythonw.exe → launch_msh.pyw`；獨立安裝版使用 `MSH.exe`。
 故障診斷入口為 `scripts/diagnostics/run_hardware_gui.bat`。
