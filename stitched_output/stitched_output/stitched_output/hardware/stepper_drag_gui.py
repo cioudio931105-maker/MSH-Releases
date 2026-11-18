@@ -26,6 +26,10 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from arduino_stepper import ArduinoStepper, list_serial_ports
+from msh_motion_policy import (
+    FIXED_MOTOR_RPM, FIXED_STEP_DELAY_MS, FIXED_STEPS_PER_SECOND,
+    LEGACY_PRELOAD_ENABLED,
+)
 
 def _find_workspace_root(start: Path) -> Path:
     for candidate in [start.parent, *start.parents]:
@@ -181,8 +185,8 @@ _BASLER_PREVIEW_EXPOSURE_UPPER_US = 50000.0
 _BASLER_PREVIEW_EXPOSURE_LOWER_US = 100.0
 _DEFAULT_X_BACKLASH_STEPS = 60
 _DEFAULT_Y_BACKLASH_STEPS = 60
-_NORMAL_MOTOR_SPEED_MS = 5
-_FIXED_MANUAL_MOTOR_RPM = 0.02
+_NORMAL_MOTOR_SPEED_MS = FIXED_STEP_DELAY_MS
+_FIXED_MANUAL_MOTOR_RPM = FIXED_MOTOR_RPM
 _SERPENTINE_STARTUP_EXTRA_STEPS = 72
 _SERPENTINE_VIDEO_TARGET_OVERLAP = 0.15
 _SERPENTINE_VIDEO_OVERLAP_TOLERANCE = 0.04
@@ -860,7 +864,7 @@ class StepperDragGUI:
         self.y_approach_direction_var = tk.IntVar(value=1)
         self.settle_ms_var = tk.IntVar(value=200)
         self.pingpong_var = tk.BooleanVar(value=False)
-        self.continuous_test_rpm_var = tk.DoubleVar(value=4.0)
+        self.continuous_test_rpm_var = tk.DoubleVar(value=FIXED_MOTOR_RPM)
         self.continuous_test_status_var = tk.StringVar(value="持續旋轉測試：停止")
         self.manual_motion_status_var = tk.StringVar(value="手動低速移動：待命（固定 0.02 RPM）")
         self._manual_motion_lock = threading.Lock()
@@ -884,7 +888,7 @@ class StepperDragGUI:
         self.serpentine_video_cols_var = tk.IntVar(value=4)
         self.serpentine_video_step_x_var = tk.IntVar(value=200)
         self.serpentine_video_step_y_var = tk.IntVar(value=6)
-        self.serpentine_video_speed_var = tk.DoubleVar(value=4.0)
+        self.serpentine_video_speed_var = tk.DoubleVar(value=FIXED_STEPS_PER_SECOND)
         self.serpentine_video_fps_var = tk.DoubleVar(value=20.0)
         self.serpentine_video_output_var = tk.StringVar()
         self.serpentine_video_status_var = tk.StringVar(value="蛇形連續錄影：未開始")
@@ -1111,8 +1115,8 @@ class StepperDragGUI:
         ttk.Label(continuous_group, text="測試轉速 RPM").grid(row=0, column=0, sticky=tk.W, padx=(6, 2), pady=6)
         ttk.Spinbox(
             continuous_group,
-            from_=0.01,
-            to=15.0,
+            from_=FIXED_MOTOR_RPM,
+            to=FIXED_MOTOR_RPM,
             increment=0.01,
             textvariable=self.continuous_test_rpm_var,
             width=8,
@@ -1163,7 +1167,7 @@ class StepperDragGUI:
         ).grid(row=2, column=0, columnspan=7, sticky=tk.W, padx=6, pady=(0, 6))
         ttk.Label(
             continuous_group,
-            text="安全提示：先以 4 RPM、無負載測試；進行拍攝、蛇行、校正或預熱時禁止啟動。",
+            text="所有運動固定 0.02 RPM；舊預熱及補償功能已隔離。",
         ).grid(row=3, column=0, columnspan=7, sticky=tk.W, padx=6, pady=(0, 6))
 
         preview_workspace = ttk.LabelFrame(frame, text="即時預覽與辨識")
@@ -1400,8 +1404,8 @@ class StepperDragGUI:
         except Exception:
             messagebox.showerror("持續旋轉測試", "RPM 必須是數字。")
             return
-        if not 0.01 <= rpm <= 15.0:
-            messagebox.showerror("持續旋轉測試", "RPM 必須介於 0.01 到 15.0。")
+        if rpm != FIXED_MOTOR_RPM:
+            messagebox.showerror("持續旋轉測試", "所有運動固定 0.02 RPM。")
             return
 
         direction_text = "正轉 CW" if int(direction) >= 0 else "反轉 CCW"
@@ -1719,6 +1723,8 @@ class StepperDragGUI:
         return self.x_backlash_var if axis_id == 0 else self.y_backlash_var
 
     def _current_backlash_steps(self, axis_id: int) -> int:
+        if not LEGACY_PRELOAD_ENABLED:
+            return 0
         backlash_var = self._get_backlash_var(axis_id)
         try:
             return max(0, int(backlash_var.get()))
@@ -1738,6 +1744,8 @@ class StepperDragGUI:
             return True
 
     def _fixed_approach_enabled(self) -> bool:
+        if not LEGACY_PRELOAD_ENABLED:
+            return False
         if not self._motion_stabilization_enabled():
             return False
         try:
@@ -1757,6 +1765,8 @@ class StepperDragGUI:
         return self._current_positive_int(self.warmup_steps_var, _DEFAULT_MOTOR_WARMUP_STEPS, minimum=1)
 
     def _current_warmup_cycles(self) -> int:
+        if not LEGACY_PRELOAD_ENABLED:
+            return 0
         return self._current_positive_int(self.warmup_cycles_var, _DEFAULT_MOTOR_WARMUP_CYCLES, minimum=0)
 
     def _current_approach_preload_steps(self) -> int:
@@ -1799,6 +1809,8 @@ class StepperDragGUI:
             stepper.move(int(steps), apply_backlash=apply_backlash)
 
     def _warmup_axis(self, axis_id: int) -> bool:
+        if not LEGACY_PRELOAD_ENABLED:
+            return False
         stepper = self._sync_axis_motion_settings(axis_id)
         if stepper is None:
             return False
@@ -1812,6 +1824,9 @@ class StepperDragGUI:
         return True
 
     def _warmup_axis_once(self, axis_id: int) -> bool:
+        if not LEGACY_PRELOAD_ENABLED:
+            self._append_log("馬達預熱已隔離，未傳送移動命令。")
+            return False
         stepper = self._sync_axis_motion_settings(axis_id)
         axis = self._axis_name(axis_id)
         if stepper is None:
@@ -1823,6 +1838,8 @@ class StepperDragGUI:
         return True
 
     def _warmup_connected_axes_for_capture(self) -> None:
+        if not LEGACY_PRELOAD_ENABLED:
+            return
         if not self._motion_stabilization_enabled():
             return
         warmed_axes: list[str] = []
@@ -2199,6 +2216,10 @@ class StepperDragGUI:
         self._append_log(f"{axis} backlash 目前使用手動設定 {current_steps} 步。")
 
     def _run_backlash_calibration(self, axis_id: int, resume_preview: bool) -> None:
+        if not LEGACY_PRELOAD_ENABLED:
+            self._append_log("backlash 預壓校正已隔離。")
+            self._backlash_calibration_running = False
+            return
         axis = self._axis_name(axis_id)
         settle_s = max(0.05, int(self.settle_ms_var.get()) / 1000.0)
         stepper = self._get_stepper(axis_id)
@@ -2491,8 +2512,7 @@ class StepperDragGUI:
             return
         try:
             stepper = ArduinoStepper(port=port, baud=int(self.baud_var.get()))
-            # Manual RUN mode must not probe by changing speed or initialize a
-            # legacy step-delay setting when a controller is connected.
+            # Verify the read-only fixed-motion policy before exposing controls.
             stepper.connect(initialize_speed=False, probe_capabilities=False)
             try:
                 stepper.set_hold(True)
@@ -2500,7 +2520,7 @@ class StepperDragGUI:
                 pass
             self._set_stepper(axis_id, stepper)
             self._append_log(
-                f"{axis}-motor 已連線: {port}，手動模式固定 0.02 RPM；按住控制移動。"
+                f"{axis}-motor 已連線: {port}，所有移動固定 0.02 RPM；預熱與補償已隔離。"
             )
         except Exception as exc:
             self._set_stepper(axis_id, None)
@@ -3854,10 +3874,10 @@ class StepperDragGUI:
         self._append_log(f"蛇形錄影起點已設為目前座標：({x},{y})")
 
     def _apply_serpentine_detection_preset(self) -> None:
-        self.serpentine_video_speed_var.set(4.0)
+        self.serpentine_video_speed_var.set(FIXED_STEPS_PER_SECOND)
         self.serpentine_video_fps_var.set(20.0)
         self._append_log(
-            "已套用蛇形錄影辨識穩定參數：Speed=4 steps/s, FPS=20；"
+            "已套用蛇形錄影辨識穩定參數：固定 0.02 RPM, FPS=20；"
             "每幀約移動 0.20 step，適合產生較穩定的辨識影片。"
         )
 
@@ -3868,7 +3888,7 @@ class StepperDragGUI:
         end_y = int(self.serpentine_video_end_y_var.get())
         step_x = int(self.serpentine_video_step_x_var.get())
         step_y = int(self.serpentine_video_step_y_var.get())
-        speed = float(self.serpentine_video_speed_var.get())
+        speed = FIXED_STEPS_PER_SECOND
         fps = float(self.serpentine_video_fps_var.get())
         raw_output_path = self.serpentine_video_output_var.get().strip()
         output_path = (
@@ -4128,20 +4148,12 @@ class StepperDragGUI:
         return output
 
     def _set_serpentine_motor_speed(self, speed_steps_per_s: float) -> int:
-        delay_ms = int(round(1000.0 / max(1.0, float(speed_steps_per_s))))
-        delay_ms = max(1, min(250, delay_ms))
+        delay_ms = FIXED_STEP_DELAY_MS
         for axis_id in (0, 1):
             stepper = self._sync_axis_motion_settings(axis_id)
             if stepper is not None:
-                axis = self._axis_name(axis_id)
-                try:
-                    stepper.set_speed_ms(delay_ms)
-                except Exception as exc:
-                    self._append_log(
-                        f"蛇形連續錄影警告：{axis}-motor 不支援 SPEED_MS 或設定失敗，"
-                        f"沿用控制板目前速度。錯誤={exc}"
-                    )
-        self._append_log(f"蛇形連續錄影馬達速度要求：SPEED_MS={delay_ms}，約 {1000.0 / delay_ms:.1f} steps/s")
+                stepper.set_fixed_speed()
+        self._append_log("蛇形連續錄影馬達速度：固定 0.02 RPM，預熱與補償已隔離。")
         return delay_ms
 
     def _restore_normal_motor_speed_after_serpentine(self) -> None:
@@ -4151,14 +4163,16 @@ class StepperDragGUI:
                 continue
             axis = self._axis_name(axis_id)
             try:
-                stepper.set_speed_ms(_NORMAL_MOTOR_SPEED_MS)
+                stepper.set_fixed_speed()
             except Exception as exc:
                 self._append_log(f"蛇形連續錄影結束後恢復 {axis}-motor 一般速度失敗：{exc}")
         self._append_log(
-            f"蛇形連續錄影結束：已恢復一般操作速度 SPEED_MS={_NORMAL_MOTOR_SPEED_MS}。"
+            "蛇形連續錄影結束：維持固定 0.02 RPM。"
         )
 
     def _move_serpentine_startup_extra_steps(self, axis_id: int, direction: int) -> None:
+        if not LEGACY_PRELOAD_ENABLED:
+            return
         stepper = self._sync_axis_motion_settings(axis_id)
         if stepper is None:
             raise RuntimeError(f"{self._axis_name(axis_id)}-motor 尚未連線。")
@@ -4342,6 +4356,7 @@ class StepperDragGUI:
         fps: float,
         output_path: Path,
     ) -> None:
+        speed = FIXED_STEPS_PER_SECOND
         writer: Optional[cv2.VideoWriter] = None
         window_name = "Serpentine Continuous Recording"
         frames_written = 0
@@ -5519,14 +5534,14 @@ class StepperDragGUI:
                 self._move_serpentine_startup_extra_steps(1, 1 if dy >= 0 else -1)
                 startup_extra_done.add(1)
             commanded_dy = int(dy)
-            if self._wbc_capture_last_move_axis == 0:
+            if LEGACY_PRELOAD_ENABLED and self._wbc_capture_last_move_axis == 0:
                 compensation = max(0, int(WBC_CAPTURE_DEFAULT_CONFIG.get("y_after_x_axis_switch_compensation_steps", 0)))
                 if compensation:
                     commanded_dy += (1 if dy > 0 else -1) * compensation
                     self._append_log(
                         f"White_Blood_Cell X→Y 換軸補償：Y 原始={dy}，補償={compensation}，送出={commanded_dy}"
                     )
-            if self._wbc_capture_resume_y_forward_compensation_pending and dy > 0:
+            if LEGACY_PRELOAD_ENABLED and self._wbc_capture_resume_y_forward_compensation_pending and dy > 0:
                 resume_compensation = max(
                     0,
                     int(WBC_CAPTURE_DEFAULT_CONFIG.get("y_forward_after_wbc_resume_compensation_steps", 0)),
@@ -5947,16 +5962,15 @@ class StepperDragGUI:
         self._wbc_capture_resume_y_forward_compensation_pending = False
 
         try:
-            speed_ms = int(WBC_CAPTURE_DEFAULT_CONFIG.get("step_move_speed_ms", _NORMAL_MOTOR_SPEED_MS))
             for axis_id in (0, 1):
                 stepper = self._get_stepper(axis_id)
                 if stepper is not None:
-                    stepper.set_speed_ms(speed_ms)
+                    stepper.set_fixed_speed()
             self._append_log(f"White_Blood_Cell 蛇行捕捉輸出：{output_dir.resolve()}")
             self._append_log(
                 f"White_Blood_Cell 固定步數掃描：step_x={WBC_CAPTURE_DEFAULT_CONFIG.get('step_x', 8)}, "
                 f"step_y={WBC_CAPTURE_DEFAULT_CONFIG.get('step_y', 8)}, "
-                f"move SPEED_MS={speed_ms}, "
+                f"move RPM={FIXED_MOTOR_RPM:.3f}, "
                 f"settle={WBC_CAPTURE_DEFAULT_CONFIG.get('detection_settle_seconds', 0.5)}s, "
                 f"detection attempts={WBC_CAPTURE_DEFAULT_CONFIG.get('detection_frame_attempts', 3)}"
             )
@@ -6071,7 +6085,7 @@ class StepperDragGUI:
                 stepper = self._get_stepper(axis_id)
                 if stepper is not None:
                     try:
-                        stepper.set_speed_ms(_NORMAL_MOTOR_SPEED_MS)
+                        stepper.set_fixed_speed()
                     except Exception:
                         pass
             try:
