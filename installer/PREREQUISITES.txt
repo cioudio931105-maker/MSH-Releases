@@ -1,0 +1,30 @@
+MSH is a Windows desktop application. Check the release page for the exact
+version, validation status, signature information and installer SHA-256.
+Unsigned review builds may show an unknown-publisher warning; install only
+from an authorized source after checking its published checksum.
+
+MSH runs locally and does not upload microscope images, CSV, JSON, or scan data.
+
+For Basler cameras, install the official Basler pylon Runtime/driver for the
+camera interface before using camera features. This installer does not modify
+COM ports, motor parameters, scan bounds, camera serial numbers, or PFS profiles.
+The online setup can assist with an explicitly reviewed, hash-pinned official
+Basler prerequisite package. Existing pylon installations are not automatically
+replaced. NVIDIA drivers are checked through diagnostics and installed through
+the official vendor flow, not silently replaced by MSH.
+
+Windows 10/11 Intel/AMD x64 is the target platform; Windows ARM is not included.
+NVIDIA GPU is preferred. A real CUDA computation must pass before GPU selection;
+CPU is a fallback and its live-scanning performance requires hardware acceptance.
+Update checks require access to the GitHub release endpoint, but failure to check
+does not prevent using the installed application. Installation waits until all
+MSH work is finished and devices are disconnected; it never force-kills MSH.
+
+This build includes no detection/classification model, research images,
+annotations or datasets. Supply your own compatible local model and choose
+it in MSH before AI recognition. MSH does not download a fallback model.
+An installer or successful model load is not clinical or hardware validation.
+
+When migrating from an older build that bundled models, back up your models,
+data and settings before removing the old application. Do not assume an
+in-place update removes old bundled files or validates firmware compatibility.

@@ -1,0 +1,3 @@
+# Release-machine-only tooling. Do not install these for ordinary end users.
+pyinstaller>=6.0,<7
+pyinstaller-hooks-contrib>=2024.0

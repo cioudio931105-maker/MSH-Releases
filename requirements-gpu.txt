@@ -1,0 +1,6 @@
+# GPU build/runtime variant tested on the development environment.
+# Install with PyTorch's CUDA 12.4 wheel index, then install requirements.txt.
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch==2.6.0+cu124
+torchvision==0.21.0+cu124
+-r requirements.txt

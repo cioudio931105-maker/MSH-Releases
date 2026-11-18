@@ -1,0 +1,17 @@
+numpy>=1.24
+opencv-python>=4.8
+opencv-contrib-python>=4.8
+matplotlib>=3.8
+scipy>=1.11
+scikit-image>=0.22
+tqdm>=4.66
+tifffile>=2024.2.12
+imageio>=2.37
+pandas>=2.2
+pillow>=10.0
+pyserial>=3.5
+ultralytics>=8.3
+onnxruntime>=1.18
+onnx>=1.17
+onnxscript>=0.2
+pypylon>=3.0
