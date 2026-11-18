@@ -9,7 +9,7 @@ from unittest import mock
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-HARDWARE_DIR = REPO_ROOT / "stitched_output" / "stitched_output" / "stitched_output" / "hardware"
+HARDWARE_DIR = REPO_ROOT / "msh_app" / "hardware"
 
 if str(HARDWARE_DIR) not in sys.path:
     sys.path.insert(0, str(HARDWARE_DIR))

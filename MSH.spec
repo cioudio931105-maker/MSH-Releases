@@ -2,7 +2,9 @@
 """Reproducible one-directory PyInstaller build for the MSH Windows GUI."""
 
 import os
+import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_submodules
 
 from msh_distribution import application_files
 
@@ -10,7 +12,7 @@ ROOT = Path(SPECPATH).resolve()
 YOLO_BUILD_CONFIG = ROOT / "build" / "ultralytics"
 YOLO_BUILD_CONFIG.mkdir(parents=True, exist_ok=True)
 os.environ["YOLO_CONFIG_DIR"] = str(YOLO_BUILD_CONFIG)
-LEGACY_ROOT = ROOT / "stitched_output" / "stitched_output" / "stitched_output"
+LEGACY_ROOT = ROOT / "msh_app"
 HARDWARE_ROOT = LEGACY_ROOT / "hardware"
 
 datas = [
@@ -25,8 +27,9 @@ for subtree in (
     "licenses",
     "assets/branding/v1",
     "cell_stitching_project",
-    "stitched_output/stitched_output/stitched_output/hardware",
-    "stitched_output/stitched_output/stitched_output/cell_identification",
+    "microscope_stitcher_project",
+    "msh_app/hardware",
+    "msh_app/cell_identification",
 ):
     datas.extend(application_files(ROOT, subtree))
 binaries = []
@@ -41,10 +44,12 @@ hiddenimports = [
     "tkinter.messagebox",
     "tkinter.ttk",
 ]
+sys.path.insert(0, str(ROOT / "microscope_stitcher_project"))
+hiddenimports.extend(collect_submodules("microscope_stitcher"))
 
 a = Analysis(
     [str(ROOT / "launch_msh.pyw")],
-    pathex=[str(ROOT), str(HARDWARE_ROOT), str(LEGACY_ROOT)],
+    pathex=[str(ROOT), str(HARDWARE_ROOT), str(LEGACY_ROOT), str(ROOT / "microscope_stitcher_project")],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,

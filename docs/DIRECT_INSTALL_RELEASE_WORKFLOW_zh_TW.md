@@ -105,7 +105,7 @@ MSH 提供功能；模型、影像、標註、訓練資料及結果由使用者�
 
 ### 4. 建置安裝版
 
-依 [BUILD.md](../BUILD.md) 使用乾淨且已驗證的 CPU 建置環境：
+依 [BUILD.md](release/BUILD.md) 使用乾淨且已驗證的 CPU 建置環境：
 
 ```powershell
 .\scripts\build_release.ps1 -Runtime cpu -PythonPath .\.venv312-cpu\Scripts\python.exe

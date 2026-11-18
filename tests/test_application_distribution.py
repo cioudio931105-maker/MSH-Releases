@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class ApplicationDistributionTests(unittest.TestCase):
     def test_ensemble_requires_local_classifier_before_constructing_model(self):
-        path = ROOT / "stitched_output/stitched_output/stitched_output/scripts/detect_classify_ensemble.py"
+        path = ROOT / "msh_app/scripts/detect_classify_ensemble.py"
         tree = ast.parse(path.read_text(encoding="utf-8"))
         function = next(node for node in tree.body if isinstance(node, ast.FunctionDef) and node.name == "load_effnet")
         factory, torch = Mock(), Mock()
@@ -117,7 +117,7 @@ class ApplicationDistributionTests(unittest.TestCase):
             "licenses/LICENSE.pt", "licenses/LICENSE.png", "licenses/LICENSE.json", "licenses/LICENSE.exe",
             "microscope_stitcher_project/reference/result.json", "datasets/classes.txt",
             "cell_stitching_project/data/smoke_input/sample.jpg", "research/capture.png",
-            "stitched_output/stitched_output/stitched_output/hardware/camera_profiles/camera.pfs",
+            "msh_app/hardware/camera_profiles/camera.pfs",
         )
         for path in forbidden:
             with self.subTest(path=path):
@@ -176,7 +176,7 @@ class ApplicationDistributionTests(unittest.TestCase):
 
     def test_all_yolo_entrypoints_validate_local_file_before_backend(self):
         count = 0
-        for subtree in ("cell_stitching_project", "offline_cell_analysis", "stitched_output"):
+        for subtree in ("cell_stitching_project", "offline_cell_analysis", "msh_app"):
             for source in (ROOT / subtree).rglob("*.py"):
                 if "__pycache__" in source.parts:
                     continue

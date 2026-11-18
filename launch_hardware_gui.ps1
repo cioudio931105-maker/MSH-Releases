@@ -7,7 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $projectRoot = [System.IO.Path]::GetFullPath($PSScriptRoot)
-$guiScript = Join-Path $projectRoot "stitched_output\stitched_output\stitched_output\hardware\stepper_drag_gui.py"
+$guiScript = Join-Path $projectRoot "msh_app\hardware\stepper_drag_gui.py"
 $launcher = Join-Path $projectRoot "launch_msh.pyw"
 $logDirectory = Join-Path $projectRoot "logs"
 $logPath = Join-Path $logDirectory "hardware_gui_startup.log"
@@ -147,7 +147,7 @@ try {
         Add-Content -LiteralPath $logPath -Encoding UTF8
 
     if ($process.ExitCode -ne 0) {
-        Show-LauncherMessage -Kind Error -Message "GUI 無法正常啟動。`n`n請執行 run_hardware_gui.bat 進入診斷模式。`n日誌：$logPath"
+        Show-LauncherMessage -Kind Error -Message "GUI 無法正常啟動。`n`n請執行 scripts\diagnostics\run_hardware_gui.bat 進入診斷模式。`n日誌：$logPath"
         exit $process.ExitCode
     }
 } catch {

@@ -6,26 +6,17 @@ from msh_motion_policy import FIXED_MOTOR_RPM, FIXED_STEP_INTERVAL_US
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FIRMWARE_FILES = (
-    PROJECT_ROOT
-    / "stitched_output"
-    / "stitched_output"
-    / "stitched_output"
+    PROJECT_ROOT / "msh_app"
     / "hardware"
     / "x_motor_controller_continuous"
     / "x_motor_controller_continuous.ino",
-    PROJECT_ROOT
-    / "stitched_output"
-    / "stitched_output"
-    / "stitched_output"
+    PROJECT_ROOT / "msh_app"
     / "hardware"
     / "y_motor_controller_continuous"
     / "y_motor_controller_continuous.ino",
 )
 HARDWARE_DIR = (
-    PROJECT_ROOT
-    / "stitched_output"
-    / "stitched_output"
-    / "stitched_output"
+    PROJECT_ROOT / "msh_app"
     / "hardware"
 )
 GUI_PATH = HARDWARE_DIR / "stepper_drag_gui.py"

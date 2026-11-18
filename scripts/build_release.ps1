@@ -97,11 +97,12 @@ try {
         "msh_model_policy.py" = (Join-Path $projectRoot "msh_model_policy.py")
         "msh_motion_policy.py" = (Join-Path $projectRoot "msh_motion_policy.py")
         "msh_runtime.py" = (Join-Path $projectRoot "msh_runtime.py")
+        "msh_workers.py" = (Join-Path $projectRoot "msh_workers.py")
         "msh_distribution.py" = (Join-Path $projectRoot "msh_distribution.py")
         "LICENSE" = (Join-Path $projectRoot "LICENSE")
         "THIRD_PARTY_NOTICES.md" = (Join-Path $projectRoot "THIRD_PARTY_NOTICES.md")
-        "hardware/arduino_stepper.py" = (Join-Path $projectRoot "stitched_output\stitched_output\stitched_output\hardware\arduino_stepper.py")
-        "hardware/stepper_drag_gui.py" = (Join-Path $projectRoot "stitched_output\stitched_output\stitched_output\hardware\stepper_drag_gui.py")
+        "hardware/arduino_stepper.py" = (Join-Path $projectRoot "msh_app\hardware\arduino_stepper.py")
+        "hardware/stepper_drag_gui.py" = (Join-Path $projectRoot "msh_app\hardware\stepper_drag_gui.py")
     }
     $sourceHashes = [ordered]@{}
     foreach ($entry in $sourceFiles.GetEnumerator()) { $sourceHashes[$entry.Key] = Get-Sha256 $entry.Value }

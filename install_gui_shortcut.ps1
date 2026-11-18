@@ -1,7 +1,8 @@
 ﻿[CmdletBinding()]
 param(
     [ValidateSet("Desktop", "StartMenu", "Both")]
-    [string]$Location = "Desktop"
+    [string]$Location = "Desktop",
+    [switch]$CheckOnly
 )
 
 $ErrorActionPreference = "Stop"
@@ -39,6 +40,16 @@ if ($Location -in @("StartMenu", "Both")) {
 }
 
 $shell = New-Object -ComObject WScript.Shell
+if ($CheckOnly) {
+    [PSCustomObject]@{
+        TargetPath = $pythonw
+        Arguments = "`"$launcher`""
+        WorkingDirectory = $projectRoot
+        ConsoleRequired = $false
+        DiagnosticEntry = (Join-Path $projectRoot "scripts\diagnostics\run_hardware_gui.bat")
+    }
+    return
+}
 foreach ($destination in $destinations) {
     New-Item -ItemType Directory -Path $destination -Force | Out-Null
     $shortcutPath = Join-Path $destination $shortcutName
@@ -57,4 +68,4 @@ foreach ($destination in $destinations) {
 }
 
 Write-Host "Shortcut installation completed."
-Write-Host "For diagnostics, run: $projectRoot\run_hardware_gui.bat"
+Write-Host "For diagnostics, run: $projectRoot\scripts\diagnostics\run_hardware_gui.bat"

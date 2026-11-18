@@ -81,7 +81,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 如果電腦有 NVIDIA GPU，執行：
 
 ```powershell
-.\install_project.ps1 -RequireCuda
+.\scripts\maintenance\install_project.ps1 -RequireCuda
 ```
 
 此腳本會自動完成：
@@ -95,13 +95,13 @@ Set-ExecutionPolicy -Scope Process Bypass
 如果要指定環境放在 E 槽，可以使用：
 
 ```powershell
-.\install_project.ps1 -RequireCuda -EnvPath "E:\Cell_Project_gpu_env"
+.\scripts\maintenance\install_project.ps1 -RequireCuda -EnvPath "E:\Cell_Project_gpu_env"
 ```
 
 如果沒有 GPU，則使用：
 
 ```powershell
-.\install_project.ps1
+.\scripts\maintenance\install_project.ps1
 ```
 
 ## 六、驗證安裝結果
@@ -135,7 +135,7 @@ E:\Cell_Project_gpu_env\python.exe -m cell_stitching_project.verify_environment 
 確認 Basler 相機、XY 馬達控制板、序列埠與 CUDA 環境：
 
 ```powershell
-.\hardware_preflight.bat
+.\scripts\commands\hardware_preflight.bat
 ```
 
 預設會檢查常用相機序號與 COM7、COM8。若新電腦的序列埠不同，請依裝置管理員顯示的 COM 編號調整指令或程式設定。
@@ -157,13 +157,13 @@ Basler 即時拍攝：
 GPU 影像拼接：
 
 ```powershell
-.\gpu_stitch.bat
+.\scripts\commands\gpu_stitch.bat
 ```
 
 硬體 GUI：
 
 ```powershell
-.\run_hardware_gui.bat
+.\scripts\diagnostics\run_hardware_gui.bat
 ```
 
 完成環境驗證後，建立無 CMD 視窗的日常桌面捷徑：
@@ -177,7 +177,7 @@ GPU 影像拼接：
 白血球蛇形掃描、偵測後暫停拍攝與繼續掃描：
 
 ```powershell
-.\run_wbc_serpentine_capture.bat
+.\scripts\commands\run_wbc_serpentine_capture.bat
 ```
 
 ## 九、常見問題
@@ -193,7 +193,7 @@ GPU 影像拼接：
 - 可重新執行：
 
 ```powershell
-.\update_project.ps1 -RequireCuda
+.\scripts\maintenance\update_project.ps1 -RequireCuda
 ```
 
 `pypylon` 匯入失敗：

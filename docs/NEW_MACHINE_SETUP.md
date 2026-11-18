@@ -43,7 +43,7 @@
 如果要產生可攜式封裝，可用：
 
 ```powershell
-.\package_for_transfer.ps1 `
+.\scripts\maintenance\package_for_transfer.ps1 `
   -Destination "E:\Cell_Project_portable.zip" `
   -IncludeModels `
   -IncludeStitchedOutput
@@ -81,7 +81,7 @@
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-.\setup_gpu_env.ps1 -EnvPath "E:\Cell_Project_gpu_env" -RequireCuda
+.\scripts\maintenance\setup_gpu_env.ps1 -EnvPath "E:\Cell_Project_gpu_env" -RequireCuda
 ```
 
 這個腳本會做的事：
@@ -95,7 +95,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 如果你只想先建環境、不跑驗證：
 
 ```powershell
-.\setup_gpu_env.ps1 -EnvPath "E:\Cell_Project_gpu_env" -SkipVerify
+.\scripts\maintenance\setup_gpu_env.ps1 -EnvPath "E:\Cell_Project_gpu_env" -SkipVerify
 ```
 
 ## 手動安裝方式

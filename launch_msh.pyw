@@ -27,7 +27,7 @@ from msh_version import __version__
 from msh_update import UpdateCheckError, UpdateManifest, check_for_update
 
 PROJECT_ROOT = application_root()
-GUI_SCRIPT = PROJECT_ROOT / "stitched_output" / "stitched_output" / "stitched_output" / "hardware" / "stepper_drag_gui.py"
+GUI_SCRIPT = PROJECT_ROOT / "msh_app" / "hardware" / "stepper_drag_gui.py"
 SPLASH_IMAGE = PROJECT_ROOT / "assets" / "msh-cyberpunk-splash-640.png"
 SOURCE_STARTUP_LOG = PROJECT_ROOT / "logs" / "hardware_gui_startup.log"
 
@@ -223,4 +223,6 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    from msh_workers import dispatch_worker
+    if not dispatch_worker(sys.argv[1:]):
+        main()

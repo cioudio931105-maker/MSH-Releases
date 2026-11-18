@@ -10,7 +10,7 @@ import numpy as np
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-LEGACY_ROOT = REPO_ROOT / "stitched_output" / "stitched_output" / "stitched_output"
+LEGACY_ROOT = REPO_ROOT / "msh_app"
 HARDWARE_DIR = LEGACY_ROOT / "hardware"
 CELL_ID_DIR = LEGACY_ROOT / "cell_identification"
 

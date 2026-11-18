@@ -14,7 +14,7 @@ import numpy as np
 
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
-HARDWARE_ROOT = WORKSPACE_ROOT / "stitched_output" / "stitched_output" / "stitched_output" / "hardware"
+HARDWARE_ROOT = WORKSPACE_ROOT / "msh_app" / "hardware"
 if str(HARDWARE_ROOT) not in sys.path:
     sys.path.insert(0, str(HARDWARE_ROOT))
 

@@ -166,10 +166,7 @@ class HardwareStage:
             )
 
         hardware_dir = (
-            Path(__file__).resolve().parents[1]
-            / "stitched_output"
-            / "stitched_output"
-            / "stitched_output"
+            Path(__file__).resolve().parents[1] / "msh_app"
             / "hardware"
         )
         if hardware_dir.exists() and str(hardware_dir) not in sys.path:

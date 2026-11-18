@@ -464,11 +464,11 @@ def estimate_duration_seconds(rows: int, cols: int, step_x: float, step_y: float
 def _hardware_dir() -> Path:
     current = Path(__file__).resolve()
     for candidate in [current.parent, *current.parents, Path.cwd(), *Path.cwd().parents]:
-        hardware_dir = candidate / "stitched_output" / "stitched_output" / "stitched_output" / "hardware"
+        hardware_dir = candidate / "msh_app" / "hardware"
         if (hardware_dir / "arduino_stepper.py").exists():
             return hardware_dir
     raise FileNotFoundError(
-        "Cannot find stitched_output/stitched_output/stitched_output/hardware/arduino_stepper.py from this workspace."
+        "Cannot find msh_app/hardware/arduino_stepper.py from this workspace."
     )
 
 

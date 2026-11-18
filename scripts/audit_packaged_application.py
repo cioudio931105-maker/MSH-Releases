@@ -22,12 +22,13 @@ EXCLUDED_PREFIXES = (
     "ultralytics/assets/", "matplotlib/mpl-data/sample_data/",
     "pypylon/pylondataprocessingplugins/", "pypylon/dataprocessingpluginsb/", "pypylon/docs/",
 )
-FIRST_PARTY_PREFIXES = ("cell_stitching_project/", "stitched_output/", "assets/", "licenses/")
+FIRST_PARTY_PREFIXES = ("cell_stitching_project/", "microscope_stitcher_project/", "msh_app/", "stitched_output/", "assets/", "licenses/")
 SOURCE_SUBTREES = (
     "licenses",
+    "microscope_stitcher_project",
     "assets/branding/v1", "cell_stitching_project",
-    "stitched_output/stitched_output/stitched_output/hardware",
-    "stitched_output/stitched_output/stitched_output/cell_identification",
+    "msh_app/hardware",
+    "msh_app/cell_identification",
 )
 
 

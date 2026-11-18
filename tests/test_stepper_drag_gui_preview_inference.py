@@ -15,10 +15,7 @@ import numpy as np
 
 
 GUI_PATH = (
-    Path(__file__).resolve().parents[1]
-    / "stitched_output"
-    / "stitched_output"
-    / "stitched_output"
+    Path(__file__).resolve().parents[1] / "msh_app"
     / "hardware"
     / "stepper_drag_gui.py"
 )

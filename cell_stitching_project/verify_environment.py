@@ -168,9 +168,9 @@ def collect_environment_report(
     elif runtime.device != "cuda":
         report["warnings"].append("Runtime is not using CUDA. GPU features will fall back to CPU.")
 
-    legacy_root = workspace_root / "stitched_output" / "stitched_output"
-    legacy_project_root = legacy_root / "stitched_output"
-    model_root = legacy_project_root / "models"
+    legacy_root = workspace_root / "msh_app"
+    legacy_project_root = legacy_root
+    model_root = workspace_root / "stitched_output" / "stitched_output" / "stitched_output" / "models"
     practical_stitcher_root = workspace_root / "microscope_stitcher_project"
     practical_reference_root = practical_stitcher_root / "reference"
     practical_tools_root = practical_stitcher_root / "tools"
@@ -179,9 +179,9 @@ def collect_environment_report(
 
     report["paths"] = {
         "root_readme": _path_status(workspace_root / "README.md"),
-        "setup_gpu_env": _path_status(workspace_root / "setup_gpu_env.ps1"),
-        "package_for_transfer": _path_status(workspace_root / "package_for_transfer.ps1"),
-        "legacy_launcher": _path_status(legacy_root / "device_auto_launcher.bat"),
+        "setup_gpu_env": _path_status(workspace_root / "scripts" / "maintenance" / "setup_gpu_env.ps1"),
+        "package_for_transfer": _path_status(workspace_root / "scripts" / "maintenance" / "package_for_transfer.ps1"),
+        "legacy_launcher": _path_status(workspace_root / "scripts" / "legacy" / "device_auto_launcher.bat"),
         "legacy_gui": _path_status(legacy_project_root / "hardware" / "stepper_drag_gui.py"),
         "default_detect_model": _path_status(default_detect_path),
         "practical_stitcher": _path_status(practical_stitcher_root / "run_practical_stitch.py"),
