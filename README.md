@@ -298,6 +298,7 @@ SSD ONNX 匯出還需要：
 - 專案地圖：[docs/PROJECT_MAP.md](docs/PROJECT_MAP.md)
 - 套件說明：[cell_stitching_project/README.md](cell_stitching_project/README.md)
 - 新機建置：[docs/NEW_MACHINE_SETUP.md](docs/NEW_MACHINE_SETUP.md)
+- 醫師影像檢閱與資料交接 V1：[docs/PHYSICIAN_IMAGE_REVIEW_HANDOFF_V1_zh_TW.md](docs/PHYSICIAN_IMAGE_REVIEW_HANDOFF_V1_zh_TW.md)
 
 ## 新機建置
 
