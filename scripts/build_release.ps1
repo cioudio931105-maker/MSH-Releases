@@ -1,13 +1,21 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$PythonPath = "",
     [ValidateSet("cpu", "gpu")]
     [string]$Runtime = "cpu",
     [switch]$Candidate,
-    [switch]$SkipInstaller
+    [switch]$SkipInstaller,
+    [string]$PublicBaseUrl = "",
+    [string]$ReleasePageUrl = ""
 )
 
 $ErrorActionPreference = "Stop"
+if (-not [string]::IsNullOrWhiteSpace($PublicBaseUrl) -and ($Candidate -or $SkipInstaller)) {
+    throw "PublicBaseUrl requires a release installer; Candidate and SkipInstaller cannot be finalized."
+}
+if (-not [string]::IsNullOrWhiteSpace($ReleasePageUrl) -and [string]::IsNullOrWhiteSpace($PublicBaseUrl)) {
+    throw "ReleasePageUrl requires PublicBaseUrl."
+}
 $projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot ".."))
 $pythonCandidates = @(
     $PythonPath,
@@ -26,6 +34,10 @@ if ($torchRuntime -ne $Runtime) {
 }
 $version = (& $python -c "from msh_version import __version__; print(__version__)").Trim()
 if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') { throw "msh_version.py 的版本格式無效：$version" }
+$releaseNotes = Join-Path $projectRoot "docs\release\RELEASE_NOTES_v$version.md"
+if (-not (Test-Path -LiteralPath $releaseNotes -PathType Leaf)) {
+    throw "缺少版本專屬 release notes：$releaseNotes"
+}
 $runtimeLabel = $Runtime.ToUpperInvariant()
 $buildMode = if ($Candidate) { "candidate" } else { "release" }
 if ($Candidate) { $runtimeLabel = "${runtimeLabel}_CANDIDATE" }
@@ -168,6 +180,17 @@ try {
     $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
     Set-Content -LiteralPath "$installer.sha256" -Value "$hash *$(Split-Path -Leaf $installer)" -Encoding ascii
     Copy-Item -LiteralPath $buildManifestPath -Destination "$installer.build-manifest.json" -Force
+    Copy-Item -LiteralPath $releaseNotes -Destination (Join-Path (Split-Path -Parent $installer) (Split-Path -Leaf $releaseNotes))
+    if (-not [string]::IsNullOrWhiteSpace($PublicBaseUrl)) {
+        $finalizeArguments = @{
+            BundleDirectory = Split-Path -Parent $installer
+            PublicBaseUrl = $PublicBaseUrl
+        }
+        if (-not [string]::IsNullOrWhiteSpace($ReleasePageUrl)) {
+            $finalizeArguments.ReleasePageUrl = $ReleasePageUrl
+        }
+        & (Join-Path $PSScriptRoot "finalize_release_bundle.ps1") @finalizeArguments
+    }
     Write-Host "Installer: $installer"
     Write-Host "Checksum: $installer.sha256"
     Write-Host "Build manifest: $installer.build-manifest.json"

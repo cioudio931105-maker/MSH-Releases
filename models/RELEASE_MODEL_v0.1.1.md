@@ -1,7 +1,7 @@
 # MSH v0.1.1 release model record
 
 Historical record only. Current MSH supplies no weights; this model is no longer
-a build prerequisite. See `docs/APPLICATION_ONLY_POLICY.md`.
+a build prerequisite. See [the application-only policy](../docs/APPLICATION_ONLY_POLICY.md).
 
 ## Model identity
 
@@ -19,6 +19,14 @@ The source weight is an external-preserved research asset and is not committed
 to Git. It was recovered read-only from the B-site cold backup dated 2026-08-17
 and copied to the equivalent ignored `stitched_output/.../models/` path on the
 A machine. Source and destination SHA-256 values matched.
+
+On 2026-09-15, the copy returned from the B site under
+`02_B地產生_帶回A地_20260911/02_核准WBC模型` was independently re-hashed at the
+A site. It matched the recorded SHA-256 and was copied to the Git-ignored
+top-level `models/wbc_focus_yolov8n_e_20260611.pt` runtime path and the
+`stitched_output/stitched_output/stitched_output/models/` release-build path in
+the MSH-036 worktree. This confirms artifact identity across the A-to-B-to-A
+handoff; it does not grant new redistribution rights.
 
 ## Embedded validation metrics
 

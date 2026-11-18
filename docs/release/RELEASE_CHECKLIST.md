@@ -12,7 +12,7 @@
 9. Install and uninstall `MSH_Setup_v<version>_CPU.exe`; confirm Documents and LocalAppData user data remain.
 10. Perform only authorised B-site hardware checks for Basler, COM, Arduino, XY stage, and scanning.
 11. Review the generated SHA-256 file and code-sign only with a valid certificate.
-12. Create the authorized GitHub Release draft for the already reviewed `v<version>` tag from step 4. Do not recreate or move an existing tag.
-13. Upload the installer, `.sha256`, and `.build-manifest.json`; mark pre-release until all required smoke and hardware tests pass.
-14. Copy `release/latest.example.json`, enter the exact release URLs and post-build SHA-256, validate the JSON, and publish it as `latest.json` in the public release-only repository.
+12. When an HTTPS publication location has been selected, run the build with `-PublicBaseUrl`, or run `scripts\finalize_release_bundle.ps1` afterward. Confirm the bundle contains only the installer, checksum, build manifest and release notes before generating `latest.json` and `release-record.json`. The finalizer rejects candidate/dirty/model-containing manifests, extra files and existing finalized metadata; it does not inspect the installer or upload anything.
+13. After publication is authorized and required acceptance is complete, upload the immutable version folder to the selected binary store. For GitHub Releases, use the already reviewed tag from step 4; do not move or recreate it. Follow the current source/notice delivery rules; do not make the historical source repository public as a shortcut.
+14. Independently download the public installer and verify its SHA-256, then publish the generated `latest.json` at the storage root as the final update switch. Retain local originals/backups until their removal is separately approved; see [storage and sync](../RELEASE_STORAGE_AND_SYNC.md).
 15. From the previous installed version, use **說明 > 檢查更新...**, confirm the displayed version/hash, download the new installer, and verify that overwrite installation preserves local settings and user data.
