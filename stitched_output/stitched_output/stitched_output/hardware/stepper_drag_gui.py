@@ -973,6 +973,8 @@ class StepperDragGUI:
         self._coord_lock = threading.Lock()
         self._virtual_x = 0
         self._virtual_y = 0
+        self._virtual_coord_known = True
+        self._virtual_coord_unknown_reason = ""
         self._manual_capture_session: Optional[Path] = None
         self._latest_capture_session: Optional[Path] = None
         self._latest_stitch_output_dir: Optional[Path] = None
@@ -1490,6 +1492,35 @@ class StepperDragGUI:
             self._virtual_x = int(x)
             self._virtual_y = int(y)
 
+    def _establish_virtual_coord(self, x: int, y: int) -> None:
+        with self._coord_lock:
+            self._virtual_x = int(x)
+            self._virtual_y = int(y)
+            self._virtual_coord_known = True
+            self._virtual_coord_unknown_reason = ""
+
+    def _mark_virtual_coord_unknown(self, reason: str) -> None:
+        message = str(reason).strip() or "移動結果無法確認"
+        with self._coord_lock:
+            self._virtual_coord_known = False
+            self._virtual_coord_unknown_reason = message
+        self._append_log(f"位置狀態已設為未知：{message}")
+
+    def _virtual_coord_is_known(self) -> bool:
+        with self._coord_lock:
+            return bool(self._virtual_coord_known)
+
+    def _require_known_virtual_coord(self, action: str) -> None:
+        with self._coord_lock:
+            known = bool(self._virtual_coord_known)
+            reason = self._virtual_coord_unknown_reason
+        if known:
+            return
+        detail = f"（原因：{reason}）" if reason else ""
+        raise RuntimeError(
+            f"目前平台位置未知，不能執行{action}{detail}。請確認實際位置後，以「座標歸零」將目前位置指定為新的虛擬原點。"
+        )
+
     def _shift_virtual_coord(self, dx: int, dy: int = 0) -> tuple[int, int]:
         with self._coord_lock:
             self._virtual_x += int(dx)
@@ -1501,10 +1532,15 @@ class StepperDragGUI:
             return self._virtual_x, self._virtual_y
 
     def _reset_virtual_coord(self) -> None:
-        self._set_virtual_coord(0, 0)
-        self._append_log("虛擬座標已歸零：(0,0)")
+        self._establish_virtual_coord(0, 0)
+        self._append_log("目前位置已指定為新的虛擬原點：(0,0)；這不是實體 homing。")
 
     def _fill_capture_start_from_current_coord(self) -> None:
+        try:
+            self._require_known_virtual_coord("帶入目前座標")
+        except RuntimeError as exc:
+            messagebox.showwarning("位置未知", str(exc))
+            return
         x, y = self._get_virtual_coord()
         self.capture_start_x_var.set(str(x))
         self.capture_start_y_var.set(str(y))
@@ -1949,6 +1985,11 @@ class StepperDragGUI:
 
     def _start_image_feedback_calibration(self, axis_id: int) -> None:
         axis = self._axis_name(axis_id)
+        try:
+            self._require_known_virtual_coord(f"{axis} 影像回饋校正")
+        except RuntimeError as exc:
+            messagebox.showwarning("位置未知", str(exc))
+            return
         if self._wbc_capture_running:
             messagebox.showwarning("影像回饋校正", "白血球固定步數蛇行掃描進行中，請先停止掃描。")
             return
@@ -1986,6 +2027,8 @@ class StepperDragGUI:
         settle_s = max(0.05, int(self.settle_ms_var.get()) / 1000.0)
         start_x, start_y = self._get_virtual_coord()
         records: list[dict[str, Any]] = []
+        motion_started = False
+        calibration_completed = False
 
         try:
             if step_size <= 0:
@@ -2006,8 +2049,9 @@ class StepperDragGUI:
             sequence.extend([(-1, -step_size) for _ in range(sample_count)])
             for sample_index, (direction, commanded_steps) in enumerate(sequence, start=1):
                 if self._capture_job_stop.is_set():
-                    break
+                    raise RuntimeError("影像回饋校正已中止；平台可能只完成部分移動。")
                 before_x, before_y = self._get_virtual_coord()
+                motion_started = True
                 self._move_axis_steps(axis_id, commanded_steps, apply_backlash=True)
                 if settle_s > 0:
                     time.sleep(settle_s)
@@ -2084,12 +2128,17 @@ class StepperDragGUI:
                 f"{axis} 影像回饋完成：平均={stats['mean_abs_px_per_step']:.3f} px/step，"
                 f"std={stats['std_abs_px_per_step']:.3f}，輸出={output_dir.resolve()}"
             )
+            self._establish_virtual_coord(start_x, start_y)
+            calibration_completed = True
         except Exception as exc:
+            if motion_started:
+                self._mark_virtual_coord_unknown(f"{axis} 影像回饋校正未完整完成：{exc}")
             self._append_log(f"{axis} 影像回饋校正失敗: {exc}")
             messagebox.showerror("影像回饋校正失敗", str(exc))
         finally:
             self._image_feedback_running = False
-            self._set_virtual_coord(start_x, start_y)
+            if motion_started and not calibration_completed and self._virtual_coord_is_known():
+                self._mark_virtual_coord_unknown(f"{axis} 影像回饋校正未確認回到起點")
             if resume_preview:
                 self.root.after(0, self._start_preview)
 
@@ -2118,6 +2167,13 @@ class StepperDragGUI:
         start_x, start_y = self._get_virtual_coord()
         start_frame: Optional[np.ndarray] = None
         preload_frame: Optional[np.ndarray] = None
+        motion_started = False
+        calibration_completed = False
+
+        def calibration_move(steps: int) -> None:
+            nonlocal motion_started
+            motion_started = True
+            self._move_axis_steps(axis_id, steps, apply_backlash=False)
 
         try:
             start_frame = self._capture_motion_tracking_frame(discard_frames=4)
@@ -2138,7 +2194,7 @@ class StepperDragGUI:
             preload_component = 0.0
             preload_motion_detected = False
             for attempt_index, preload_increment in enumerate(preload_attempts, start=1):
-                self._move_axis_steps(axis_id, preload_increment, apply_backlash=False)
+                calibration_move(preload_increment)
                 preload_total_steps += preload_increment
                 time.sleep(settle_s)
                 preload_frame = self._capture_motion_tracking_frame(discard_frames=3)
@@ -2170,7 +2226,7 @@ class StepperDragGUI:
             estimated_backlash: Optional[int] = None
             actual_reverse_motion_steps = 0
             for _ in range(search_limit):
-                self._move_axis_steps(axis_id, -1, apply_backlash=False)
+                calibration_move(-1)
                 reverse_steps_taken += 1
                 time.sleep(settle_s)
                 probe_frame = self._capture_motion_tracking_frame(discard_frames=2)
@@ -2194,7 +2250,7 @@ class StepperDragGUI:
 
             restore_steps = preload_total_steps - actual_reverse_motion_steps
             if restore_steps > 0:
-                self._move_axis_steps(axis_id, -restore_steps, apply_backlash=False)
+                calibration_move(-restore_steps)
                 time.sleep(settle_s)
 
             restored_frame = self._capture_motion_tracking_frame(discard_frames=3)
@@ -2206,7 +2262,7 @@ class StepperDragGUI:
                 correction_steps = max(0, min(20, estimated_steps))
                 if correction_steps > 0:
                     correction_direction = -1 if residual_component * preload_component > 0 else 1
-                    self._move_axis_steps(axis_id, correction_direction * correction_steps, apply_backlash=False)
+                    calibration_move(correction_direction * correction_steps)
                     time.sleep(settle_s)
                     self._append_log(
                         f"{axis} 校正回位微調：{correction_direction * correction_steps} 步，residual={residual_component:.3f} px"
@@ -2215,16 +2271,20 @@ class StepperDragGUI:
             self._set_virtual_coord(start_x, start_y)
             self._get_backlash_var(axis_id).set(int(estimated_backlash))
             stepper.set_backlash_steps(int(estimated_backlash))
+            calibration_completed = True
             self._append_log(f"{axis} backlash 自動校正完成：建議補償={estimated_backlash} 步。")
         except Exception as exc:
             try:
-                self._set_virtual_coord(start_x, start_y)
                 stepper.set_backlash_steps(original_backlash)
             except Exception:
                 pass
+            if motion_started:
+                self._mark_virtual_coord_unknown(f"{axis} backlash 校正未完整完成：{exc}")
             self._append_log(f"{axis} backlash 自動校正失敗: {exc}")
             messagebox.showerror("backlash 校正失敗", str(exc))
         finally:
+            if motion_started and not calibration_completed and self._virtual_coord_is_known():
+                self._mark_virtual_coord_unknown(f"{axis} backlash 校正未確認回到起點")
             try:
                 stepper.set_backlash_steps(self._current_backlash_steps(axis_id))
             except Exception:
@@ -2273,6 +2333,7 @@ class StepperDragGUI:
     def _move_to_coordinate(self, target_x: int, target_y: int, label: str = "目標座標") -> None:
         if self._wbc_capture_running:
             raise RuntimeError("白血球固定步數蛇行掃描進行中，請使用停止或繼續掃描按鈕。")
+        self._require_known_virtual_coord(label)
         current_x, current_y = self._get_virtual_coord()
         dx = int(target_x) - current_x
         dy = int(target_y) - current_y
@@ -2306,6 +2367,12 @@ class StepperDragGUI:
     def _move_to_origin(self) -> None:
         if self._wbc_capture_running:
             messagebox.showwarning("回到原點", "白血球固定步數蛇行掃描進行中，請先停止掃描。")
+            return
+        try:
+            self._require_known_virtual_coord("回到原點")
+        except RuntimeError as exc:
+            self._append_log(f"回到原點已拒絕：{exc}")
+            messagebox.showwarning("位置未知", str(exc))
             return
         x, y = self._get_virtual_coord()
         if x == 0 and y == 0:
@@ -3451,6 +3518,13 @@ class StepperDragGUI:
             cv2.destroyWindow(window_name)
         except Exception:
             pass
+        inference_thread = self._preview_inference_thread
+        if inference_thread is not None and inference_thread is not threading.current_thread():
+            inference_thread.join(timeout=1.0)
+        if self._preview_inference_thread is inference_thread:
+            self._preview_inference_thread = None
+        self._release_camera()
+        self._preview_thread = None
         self._preview_running = False
 
     def _start_preview(self) -> None:
@@ -3491,6 +3565,13 @@ class StepperDragGUI:
         self._append_log("預覽已開始。")
 
 
+    def _release_camera(self) -> None:
+        with self._camera_lock:
+            cap = self.cap
+            self.cap = None
+        if cap is not None:
+            cap.release()
+
     def _stop_preview(self) -> None:
         if not self._preview_running and self._preview_thread is None and self._preview_inference_thread is None:
             return
@@ -3504,10 +3585,7 @@ class StepperDragGUI:
             inference_thread.join(timeout=1.0)
         self._preview_thread = None
         self._preview_inference_thread = None
-        with self._camera_lock:
-            if self.cap is not None:
-                self.cap.release()
-                self.cap = None
+        self._release_camera()
 
     def _capture_frame(self) -> None:
         try:

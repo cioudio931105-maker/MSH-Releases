@@ -8,6 +8,7 @@ import time
 from tempfile import TemporaryDirectory
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 
@@ -66,6 +67,52 @@ class PreviewInferenceTests(unittest.TestCase):
             worker.join(timeout=1.0)
 
         self.assertFalse(worker.is_alive())
+
+
+class PreviewCleanupTests(unittest.TestCase):
+    class _Value:
+        def __init__(self, value) -> None:
+            self.value = value
+
+        def get(self):
+            return self.value
+
+    def test_q_closes_preview_and_releases_camera(self) -> None:
+        gui = GUI_MODULE.StepperDragGUI.__new__(GUI_MODULE.StepperDragGUI)
+        gui._preview_stop = threading.Event()
+        gui._preview_inference_stop = threading.Event()
+        gui._preview_inference_thread = None
+        gui._preview_thread = threading.current_thread()
+        gui._preview_running = True
+        gui._preview_detection_lock = threading.Lock()
+        gui._preview_detections = []
+        gui._camera_lock = threading.Lock()
+        gui.cap = mock.Mock()
+        camera = gui.cap
+        frame = np.zeros((8, 8, 3), dtype=np.uint8)
+        gui._ensure_camera_open = mock.Mock(return_value=camera)
+        gui._read_latest_frame = mock.Mock(return_value=frame)
+        gui._get_virtual_coord = mock.Mock(return_value=(0, 0))
+        gui._prepare_preview_frame = mock.Mock(side_effect=lambda value: value)
+        gui._styled_camera_frame = mock.Mock(side_effect=lambda value: value.copy())
+        gui._resize_for_display_keep_aspect = mock.Mock(side_effect=lambda value, *_args: value)
+        gui.object_detect_preview_var = self._Value(False)
+        gui._append_log = mock.Mock()
+
+        with (
+            mock.patch.object(GUI_MODULE.cv2, "namedWindow"),
+            mock.patch.object(GUI_MODULE.cv2, "moveWindow"),
+            mock.patch.object(GUI_MODULE.cv2, "imshow"),
+            mock.patch.object(GUI_MODULE.cv2, "waitKey", return_value=ord("q")),
+            mock.patch.object(GUI_MODULE.cv2, "destroyWindow"),
+        ):
+            gui._preview_loop()
+
+        camera.release.assert_called_once_with()
+        self.assertIsNone(gui.cap)
+        self.assertIsNone(gui._preview_thread)
+        self.assertFalse(gui._preview_running)
+        self.assertTrue(gui._preview_inference_stop.is_set())
 
 
 class MotorConnectionUiTests(unittest.TestCase):
