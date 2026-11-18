@@ -1,3 +1,7 @@
+現行一般使用者流程：請參閱 docs/DIRECT_INSTALL_RELEASE_WORKFLOW_zh_TW.md。
+以下保留為歷史開發／原始碼環境參考，不是 Windows 安裝版的操作步驟。
+現行交付不包含模型或研究資料，舊版 IncludeModels／IncludeStitchedOutput 等參數已停用。
+
 Cell Project 完整交付與新電腦 GPU 安裝步驟
 ==========================================
 
@@ -19,7 +23,7 @@ Cell Project 完整交付與新電腦 GPU 安裝步驟
 
 cd C:\Cell_Project\Cell_Project
 Set-ExecutionPolicy -Scope Process Bypass
-.\package_for_transfer.ps1 -Destination "D:\Cell_Project_delivery_20260408.zip" -IncludeModels -IncludeStitchedOutput
+.\package_for_transfer.ps1 -Destination "D:\Cell_Project_delivery_20260408.zip"
 
 成功時會看到類似：
 

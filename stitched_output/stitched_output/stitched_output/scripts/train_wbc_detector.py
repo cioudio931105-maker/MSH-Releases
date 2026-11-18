@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model, local_training_options
+
 import argparse
 from pathlib import Path
 
@@ -23,8 +25,9 @@ def main() -> int:
     parser.add_argument("--exist-ok", action="store_true")
     args = parser.parse_args()
 
-    model = YOLO(str(args.model))
+    model = YOLO(require_local_model(str(args.model)))
     model.train(
+        **local_training_options(args.model),
         data=str(args.data),
         epochs=args.epochs,
         imgsz=args.imgsz,

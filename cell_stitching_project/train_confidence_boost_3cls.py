@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model, local_training_options
+
 import argparse
 import shutil
 from datetime import datetime
@@ -106,7 +108,7 @@ def main() -> int:
     device = auto_device() if str(args.device).lower() == "auto" else str(args.device)
     print(f"model={args.model.resolve()}")
     print(f"device={device}")
-    model = YOLO(str(args.model))
+    model = YOLO(require_local_model(str(args.model)))
     result = model.train(
         data=str(data_yaml),
         epochs=int(args.epochs),
@@ -124,7 +126,7 @@ def main() -> int:
         dfl=float(args.dfl_loss_gain),
         cos_lr=True,
         seed=int(args.seed),
-        pretrained=True,
+        **local_training_options(args.model),
         device=device,
         cache=False,
         mosaic=0.10,

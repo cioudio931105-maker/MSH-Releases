@@ -1,11 +1,29 @@
 # Microscope-Scanner-Helper_MSH (MSH)
 
+MSH first-party application source is licensed under GNU AGPL version 3
+(`AGPL-3.0-only`); see [LICENSE](LICENSE). Third-party code retains its own terms
+and attribution in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and [licenses](licenses/README.md).
+The selected release direction is public application source with privately managed
+user models/data; see [source release preparation](docs/OPEN_SOURCE_RELEASE_zh_TW.md).
+
+## Application-only distribution
+
+MSH supplies functionality only. **Users provide their own models and data.**
+New source commits, source handoffs and installers exclude weights, datasets,
+research images, annotations and experiment outputs. Local training remains
+supported; its inputs and results stay ignored. See [the distribution policy](docs/APPLICATION_ONLY_POLICY.md),
+including the limits of existing Git history and older installers.
+
 MSH is a research project for microscope scanning, WBC AI detection, image
 stitching, Basler camera integration, and XY-platform/Arduino hardware control.
-Most model weights and research datasets are external or machine-local assets;
-a normal Git clone does not provide them unless a file is explicitly tracked.
+Models and research datasets are user-supplied local assets.
 
 ## Windows user installation
+
+For the complete direct-install and future release workflow, see
+[MSH 直接安裝與往後發佈流程](docs/DIRECT_INSTALL_RELEASE_WORKFLOW_zh_TW.md).
+The application-only installer is not published yet; existing v0.1.x artifacts
+must not be described as model-free builds.
 
 Download `MSH_Setup_v<version>_CPU.exe` and its `.sha256` checksum from the
 matching GitHub Release. Verify the SHA-256 value, run the installer, then start **MSH**
@@ -39,11 +57,10 @@ credential.
 - Select COM ports in the GUI; no application COM port is hardcoded.
 - A Basler PFS profile is never applied automatically. Choose it explicitly for
   the active camera.
-- The v0.1.3 review build uses `wbc_focus_yolov8n_e_20260611.pt` as its
-  built-in WBC-only detection model. It draws WBC bounding boxes but does not
-  classify WBC subtypes. The generic `yolov8n.pt` remains only as a fallback.
-- A later approved model can be placed in `%LOCALAPPDATA%\MSH\models\` or
-  selected in the GUI. See [models/README.md](models/README.md).
+- New builds include no WBC or generic fallback model. Select your own existing
+  local detection model in the GUI. Missing models are not downloaded by MSH.
+- Research presets below describe optional local paths, not included files. Supply
+  your own models and optional label lists. See [models/README.md](models/README.md).
 
 ### Troubleshooting
 
@@ -54,14 +71,14 @@ credential.
 - **GPU unavailable:** the general `_CPU.exe` installer intentionally runs
   inference on CPU. A separately tested `_GPU.exe` variant may be supplied for
   supported NVIDIA systems.
-- **Model not found:** install an approved model in the location above or use
-  the model chooser.
+- **Model not found:** select your own existing local model with the model chooser.
 - **Startup failed:** inspect `%LOCALAPPDATA%\MSH\msh.log`.
 
 Release maintainers should follow [BUILD.md](BUILD.md),
 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md), and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Current candidate notes are in
-[RELEASE_NOTES_v0.1.3.md](RELEASE_NOTES_v0.1.3.md).
+[RELEASE_NOTES_v0.1.4.md](RELEASE_NOTES_v0.1.4.md); internal candidate evidence is in
+[RELEASE_CANDIDATE_v0.1.4.md](docs/RELEASE_CANDIDATE_v0.1.4.md).
 
 ## 400x WBC-Only Detection
 

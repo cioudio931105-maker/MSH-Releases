@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model, local_training_options
+
 import argparse
 import ast
 from pathlib import Path
@@ -196,7 +198,7 @@ def train_wbc400(args: argparse.Namespace) -> Path | None:
         "close_mosaic": int(args.close_mosaic),
         "seed": int(args.seed),
         "single_cls": bool(args.single_cls or args.wbc_only),
-        "pretrained": True,
+
         "cache": bool(args.cache),
         "mosaic": float(args.mosaic),
         "mixup": float(args.mixup),
@@ -226,8 +228,8 @@ def train_wbc400(args: argparse.Namespace) -> Path | None:
             "Ultralytics is required for YOLO training. Install the GPU requirements first."
         ) from exc
 
-    model = YOLO(model_arg)
-    result = model.train(**train_kwargs)
+    model = YOLO(require_local_model(model_arg))
+    result = model.train(**(train_kwargs | local_training_options(model_arg)))
     save_dir = Path(getattr(result, "save_dir", Path(args.project) / str(args.name)))
     best_path = save_dir / "weights" / "best.pt"
     print(f"classes={class_names}")

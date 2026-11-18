@@ -26,19 +26,13 @@ if ($torchRuntime -ne $Runtime) {
 }
 $version = (& $python -c "from msh_version import __version__; print(__version__)").Trim()
 if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') { throw "msh_version.py 的版本格式無效：$version" }
-$releaseModelRelativePath = (& $python -c "from msh_release_model import RELEASE_MODEL_RELATIVE_PATH; print(RELEASE_MODEL_RELATIVE_PATH)").Trim()
-$expectedReleaseModelHash = (& $python -c "from msh_release_model import RELEASE_MODEL_SHA256; print(RELEASE_MODEL_SHA256)").Trim().ToLowerInvariant()
-$releaseModel = Join-Path $projectRoot $releaseModelRelativePath
-if (-not (Test-Path -LiteralPath $releaseModel -PathType Leaf)) {
-    throw "缺少核准的 WBC 發行模型：$releaseModel"
-}
-$actualReleaseModelHash = (Get-FileHash -LiteralPath $releaseModel -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($actualReleaseModelHash -ne $expectedReleaseModelHash) {
-    throw "WBC 發行模型 SHA-256 不符。預期 $expectedReleaseModelHash，實際 $actualReleaseModelHash"
-}
 $runtimeLabel = $Runtime.ToUpperInvariant()
 $buildMode = if ($Candidate) { "candidate" } else { "release" }
 if ($Candidate) { $runtimeLabel = "${runtimeLabel}_CANDIDATE" }
+$installer = Join-Path $projectRoot "dist\release\v$version\MSH_Setup_v${version}_$runtimeLabel.exe"
+if (-not $SkipInstaller -and (Test-Path -LiteralPath $installer)) {
+    throw "拒絕覆寫既有發行產物：$installer。請升版，或使用新的候選版本。"
+}
 $distPath = Join-Path "dist" $Runtime
 $workPath = Join-Path "build\pyinstaller" $Runtime
 $publishedApp = Join-Path $projectRoot "$distPath\MSH"
@@ -76,6 +70,12 @@ try {
     if (-not (Test-Path -LiteralPath $packagedApp -PathType Leaf)) {
         throw "PyInstaller 沒有產生預期的 MSH.exe：$packagedApp"
     }
+    $forbiddenWeights = @(Get-ChildItem -LiteralPath $stagingApp -File -Recurse | Where-Object {
+        $_.Extension.ToLowerInvariant() -in @('.pt', '.pth', '.ckpt', '.onnx', '.engine', '.safetensors', '.tflite', '.h5', '.keras', '.pb', '.pfs', '.weights', '.omc', '.caffemodel')
+    })
+    if ($forbiddenWeights.Count -gt 0) {
+        throw "發行包含有禁止散布的模型或設備設定，拒絕建立安裝檔：$($forbiddenWeights.Name -join ', ')"
+    }
 
     $gitCommit = (& git -C $projectRoot rev-parse HEAD).Trim().ToLowerInvariant()
     if ($LASTEXITCODE -ne 0 -or $gitCommit -notmatch '^[0-9a-f]{40}$') {
@@ -84,21 +84,30 @@ try {
     $gitDirtyPaths = @(& git -C $projectRoot status --porcelain)
     if ($LASTEXITCODE -ne 0) { throw "無法讀取 Git 工作樹狀態；拒絕建立無法追溯的發行包。" }
     $releaseTag = "v$version"
-    $tagCommitOutput = & git -C $projectRoot rev-list -n 1 $releaseTag 2>$null
-    $tagCommit = if ($null -eq $tagCommitOutput) { "" } else { ([string]$tagCommitOutput).Trim().ToLowerInvariant() }
     if (-not $Candidate) {
         if ($gitDirtyPaths.Count -gt 0) { throw "正式發行禁止使用含未提交變更的工作樹。請先 commit，或明確使用 -Candidate。" }
+        $tagCommitOutput = & git -C $projectRoot rev-list -n 1 $releaseTag 2>$null
+        $tagCommit = if ($null -eq $tagCommitOutput) { "" } else { ([string]$tagCommitOutput).Trim().ToLowerInvariant() }
         if ($tagCommit -ne $gitCommit) { throw "正式發行要求 HEAD 有對應 tag $releaseTag。請先建立並審核 tag，或使用 -Candidate。" }
     }
     $sourceFiles = [ordered]@{
         "launch_msh.pyw" = (Join-Path $projectRoot "launch_msh.pyw")
         "msh_version.py" = (Join-Path $projectRoot "msh_version.py")
         "MSH.spec" = (Join-Path $projectRoot "MSH.spec")
+        "msh_model_policy.py" = (Join-Path $projectRoot "msh_model_policy.py")
+        "msh_distribution.py" = (Join-Path $projectRoot "msh_distribution.py")
+        "LICENSE" = (Join-Path $projectRoot "LICENSE")
+        "THIRD_PARTY_NOTICES.md" = (Join-Path $projectRoot "THIRD_PARTY_NOTICES.md")
         "hardware/arduino_stepper.py" = (Join-Path $projectRoot "stitched_output\stitched_output\stitched_output\hardware\arduino_stepper.py")
         "hardware/stepper_drag_gui.py" = (Join-Path $projectRoot "stitched_output\stitched_output\stitched_output\hardware\stepper_drag_gui.py")
     }
     $sourceHashes = [ordered]@{}
     foreach ($entry in $sourceFiles.GetEnumerator()) { $sourceHashes[$entry.Key] = Get-Sha256 $entry.Value }
+    $noticeHashes = [ordered]@{}
+    foreach ($notice in (Get-ChildItem -LiteralPath (Join-Path $projectRoot 'licenses') -File -Recurse | Sort-Object FullName)) {
+        $relative = $notice.FullName.Substring($projectRoot.Length + 1).Replace('\', '/')
+        $noticeHashes[$relative] = Get-Sha256 $notice.FullName
+    }
     $buildManifest = [ordered]@{
         schema_version = 1
         application = "MSH"
@@ -114,7 +123,11 @@ try {
         torch_version = (& $python -c "import torch; print(torch.__version__)").Trim()
         app_exe_sha256 = Get-Sha256 $packagedApp
         source_sha256 = $sourceHashes
-        release_model_sha256 = $actualReleaseModelHash
+        model_distribution = "user-supplied"
+        bundled_models = @()
+        bundled_research_data = $false
+        source_license = 'AGPL-3.0-only'
+        license_notice_sha256 = $noticeHashes
     }
     $buildManifestPath = Join-Path $stagingApp $buildManifestName
     $buildManifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $buildManifestPath -Encoding utf8

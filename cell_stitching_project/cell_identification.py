@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model
+
 import argparse
 import ast
 from dataclasses import dataclass, field
@@ -505,7 +507,7 @@ class CellIdentificationDetector:
 
         if self.backend == "ultralytics":
             YOLO = _import_ultralytics()
-            self.model = YOLO(str(self.model_path))
+            self.model = YOLO(require_local_model(str(self.model_path)))
             self.providers: list[str] = []
             if not self.class_names:
                 self.class_names = _normalize_class_names(getattr(self.model, "names", []))

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model
+
 import csv
 import json
 import sys
@@ -308,7 +310,7 @@ class YoloWhiteBloodCellDetector:
         self.model_path = Path(model_path)
         if not self.model_path.exists():
             raise FileNotFoundError(f"White blood cell model not found: {self.model_path}")
-        self.model = YOLO(str(self.model_path))
+        self.model = YOLO(require_local_model(str(self.model_path)))
 
     def detect(self, frame: np.ndarray) -> list[WBCDetection]:
         inference_confidence = min(

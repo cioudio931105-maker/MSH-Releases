@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .model_files import require_local_model
+
 import csv
 from pathlib import Path
 from typing import Iterable
@@ -76,7 +78,7 @@ class YoloV8Detector:
         self.model_path = Path(model_path)
         if not self.model_path.exists():
             raise FileNotFoundError(f"YOLO model not found: {self.model_path}")
-        self.model = YOLO(str(self.model_path))
+        self.model = YOLO(require_local_model(str(self.model_path)))
         self.confidence = float(confidence)
         self.iou = float(iou)
         self.device = self._resolve_device(device)

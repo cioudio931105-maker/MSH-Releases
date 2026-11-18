@@ -1,0 +1,4 @@
+# Preserve original license/notice bytes, including upstream whitespace and CRLF.
+# Source-code whitespace checks remain enabled elsewhere.
+/LICENSE -text -whitespace
+/licenses/** -text -whitespace

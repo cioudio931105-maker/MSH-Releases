@@ -70,9 +70,11 @@ class CellIdentificationDetectorTests(unittest.TestCase):
             self.assertEqual(load_class_names(yaml_file), ["monocyte", "eosinophil"])
 
     def test_ultralytics_uses_embedded_class_names_when_file_missing(self) -> None:
-        with patch("cell_stitching_project.cell_identification._import_ultralytics", return_value=_FakeYOLOModel):
+        with tempfile.TemporaryDirectory() as temp_dir, patch("cell_stitching_project.cell_identification._import_ultralytics", return_value=_FakeYOLOModel):
+            local_model = Path(temp_dir) / "dummy.pt"
+            local_model.write_bytes(b"synthetic model stand-in; backend is mocked")
             detector = CellIdentificationDetector(
-                model_path="dummy.pt",
+                model_path=local_model,
                 backend="ultralytics",
                 class_names=None,
             )
@@ -81,6 +83,12 @@ class CellIdentificationDetectorTests(unittest.TestCase):
         self.assertEqual(detector.class_names, ["embedded_class"])
         self.assertEqual(len(detections), 1)
         self.assertEqual(detections[0].label, "embedded_class")
+
+    def test_missing_model_does_not_invoke_backend(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir, patch("cell_stitching_project.cell_identification._import_ultralytics") as backend:
+            with self.assertRaisesRegex(FileNotFoundError, "does not supply or download"):
+                CellIdentificationDetector(Path(temp_dir) / "yolov8n.pt", backend="ultralytics")
+            backend.return_value.assert_not_called()
 
 
 if __name__ == "__main__":

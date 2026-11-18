@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model
+
 import argparse
 import importlib
 import json
@@ -93,7 +95,7 @@ def _read_label_names(label_path: Path) -> list[str]:
 
 def _load_ultralytics_model(model_path: Path) -> tuple[Any, list[str]]:
     ultralytics = importlib.import_module("ultralytics")
-    model = ultralytics.YOLO(str(model_path))
+    model = ultralytics.YOLO(require_local_model(str(model_path)))
     names = getattr(model, "names", {})
     if isinstance(names, dict):
         ordered_keys = sorted(names, key=lambda key: int(key) if str(key).isdigit() else str(key))

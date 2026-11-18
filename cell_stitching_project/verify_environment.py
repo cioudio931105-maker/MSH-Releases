@@ -184,7 +184,6 @@ def collect_environment_report(
         "legacy_launcher": _path_status(legacy_root / "device_auto_launcher.bat"),
         "legacy_gui": _path_status(legacy_project_root / "hardware" / "stepper_drag_gui.py"),
         "default_detect_model": _path_status(default_detect_path),
-        "fallback_detect_model": _path_status(model_root / "yolov8n.pt"),
         "practical_stitcher": _path_status(practical_stitcher_root / "run_practical_stitch.py"),
         "practical_stitcher_ps1": _path_status(practical_stitcher_root / "run_practical_stitch.ps1"),
         "practical_stitcher_readme": _path_status(practical_stitcher_root / "README.md"),
@@ -200,7 +199,10 @@ def collect_environment_report(
     }
     for key, value in report["paths"].items():
         if not value["exists"]:
-            report["errors"].append(f"Required project path is missing: {key} -> {value['path']}")
+            if key in {"default_detect_model", "practical_golden_placements", "practical_learning_json"}:
+                report["warnings"].append(f"Optional user-supplied model/reference is absent: {key}")
+            else:
+                report["errors"].append(f"Required project path is missing: {key} -> {value['path']}")
 
     basler: dict[str, Any] = {"enumerated": False, "devices": []}
     if not skip_basler_enumeration:

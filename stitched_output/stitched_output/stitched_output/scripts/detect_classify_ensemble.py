@@ -9,6 +9,8 @@
 
 from __future__ import annotations
 
+from msh_model_policy import require_local_model
+
 import argparse
 import os
 from pathlib import Path
@@ -32,21 +34,19 @@ def load_labels(labels_path: Optional[str]) -> List[str]:
 
 def load_effnet(weights_path: Optional[str], num_classes: Optional[int], device: str):
     """
-    載入 EfficientNet-B0；若未提供權重則用 ImageNet 預訓練。
+    載入使用者提供的本機 EfficientNet-B0 權重，不下載預訓練模型。
     若有自訂權重，接受 torch.save(state_dict) 或含 state_dict 的 checkpoint。
     """
-    if weights_path:
-        model = efficientnet_b0(weights=None)
-        if num_classes and num_classes != model.classifier[1].out_features:
-            # 自訂類別數時替換最後全連接層
-            model.classifier[1] = torch.nn.Linear(model.classifier[1].in_features, num_classes)
-        state = torch.load(weights_path, map_location=device)
-        # 可接受純 state_dict 或含 'state_dict' 的 checkpoint
-        if isinstance(state, dict) and "state_dict" in state:
-            state = {k.replace("model.", "").replace("module.", ""): v for k, v in state["state_dict"].items()}
-        model.load_state_dict(state, strict=False)
-    else:
-        model = efficientnet_b0(weights=EfficientNet_B0_Weights.IMAGENET1K_V1)
+    weights_path = require_local_model(weights_path)
+    model = efficientnet_b0(weights=None)
+    if num_classes and num_classes != model.classifier[1].out_features:
+        # 自訂類別數時替換最後全連接層
+        model.classifier[1] = torch.nn.Linear(model.classifier[1].in_features, num_classes)
+    state = torch.load(weights_path, map_location=device)
+    # 可接受純 state_dict 或含 'state_dict' 的 checkpoint
+    if isinstance(state, dict) and "state_dict" in state:
+        state = {k.replace("model.", "").replace("module.", ""): v for k, v in state["state_dict"].items()}
+    model.load_state_dict(state, strict=False)
 
     model.eval().to(device)
     return model
@@ -81,14 +81,15 @@ def run_ensemble(
     save_dir: str,
     device: str = "cpu",
 ):
+    effnet_weights = require_local_model(effnet_weights)
     os.makedirs(save_dir, exist_ok=True)
     labels = load_labels(labels_path)
     num_classes = len(labels) if labels_path else None
 
     print(f"Loading YOLO model: {yolo_model_path}")
-    detector = YOLO(yolo_model_path)
+    detector = YOLO(require_local_model(yolo_model_path))
 
-    print(f"Loading EfficientNet-B0 ({'custom weights' if effnet_weights else 'ImageNet pretrained'})")
+    print(f"Loading local EfficientNet-B0 weights: {effnet_weights}")
     classifier = load_effnet(effnet_weights, num_classes, device)
 
     img = cv2.imread(source)
@@ -164,7 +165,7 @@ def build_args():
     p = argparse.ArgumentParser(description="YOLOv8 detection + EfficientNet classification ensemble")
     p.add_argument("--source", required=True, help="Path to image")
     p.add_argument("--yolo_model", default="models/yolov8n.pt", help="YOLO detection model path")
-    p.add_argument("--effnet_weights", default=None, help="EfficientNet weight file (.pth/.pt). If omitted, uses ImageNet pretrained.")
+    p.add_argument("--effnet_weights", required=True, help="User-supplied local EfficientNet weight file (.pth/.pt); no download fallback.")
     p.add_argument("--labels", default=None, help="Optional labels file (one class name per line)")
     p.add_argument("--conf", type=float, default=0.25, help="YOLO detection confidence threshold")
     p.add_argument("--save_dir", default="runs/detect_effnet", help="Output directory")

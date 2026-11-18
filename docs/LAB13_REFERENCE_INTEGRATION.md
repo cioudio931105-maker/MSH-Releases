@@ -1,6 +1,6 @@
 # Lab13 範例程式整合說明
 
-`C:\Users\will0\Downloads\Lab13\Lab13` 內的資料集類別為：
+使用者自行提供的 `Lab13/` 範例目錄，其資料集類別為：
 
 - `power`
 - `soda`

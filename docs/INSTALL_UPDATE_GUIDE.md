@@ -1,4 +1,8 @@
-# 安裝與更新指南
+# 開發環境安裝與更新指南
+
+> 這是開發／原始碼環境參考，不是一般使用者的安裝方法。
+> 一般使用者請依 [MSH 直接安裝與往後發佈流程](DIRECT_INSTALL_RELEASE_WORKFLOW_zh_TW.md) 下載安裝檔。
+> 現行交付不包含模型或研究資料；模型由使用者提供，舊版 IncludeModels 等參數已停用。
 
 這份文件是給「另一台幾乎沒有相關環境的 Windows 電腦」使用的。
 
@@ -39,16 +43,14 @@
 建議至少交付：
 
 - 整個專案資料夾
-- 模型檔
+- 模型由使用者自行保存與提供，不隨專案交付
 - legacy GUI 與硬體控制檔
 
 如果要先打包成 zip，可用：
 
 ```powershell
 .\package_for_transfer.ps1 `
-  -Destination "E:\Cell_Project_portable.zip" `
-  -IncludeModels `
-  -IncludeStitchedOutput
+  -Destination "E:\Cell_Project_portable.zip"
 ```
 
 ## 新機安裝方式

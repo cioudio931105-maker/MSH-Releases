@@ -53,9 +53,9 @@ def alexnet(pretrained=False, **kwargs):
     `"One weird trick..." <https://arxiv.org/abs/1404.5997>`_ paper.
 
     Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        pretrained (bool): Must be False; load user-supplied local weights separately.
     """
-    model = AlexNet(**kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['alexnet']))
+        raise ValueError("MSH does not supply or download models; load your own local state_dict.")
+    model = AlexNet(**kwargs)
     return model

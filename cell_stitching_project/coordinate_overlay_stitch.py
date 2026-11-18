@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model
+
 import argparse
 import csv
 import json
@@ -155,7 +157,7 @@ def _resolve_detection_feature_model_path(requested: str | None = None) -> str:
         resolved = resolve_default_detection_model_path(Path(__file__).resolve().parents[1])
         if resolved:
             return resolved
-    return "yolov8n.pt"
+    return ""
 
 
 def _load_ultralytics_model(model_path: str):
@@ -163,7 +165,7 @@ def _load_ultralytics_model(model_path: str):
         from ultralytics import YOLO
     except Exception as exc:  # pragma: no cover - depends on optional runtime package
         raise RuntimeError("ultralytics is required for detection-feature stitching.") from exc
-    return YOLO(model_path)
+    return YOLO(require_local_model(model_path))
 
 
 def _name_from_detection_model(names: Any, cls_id: int) -> str:

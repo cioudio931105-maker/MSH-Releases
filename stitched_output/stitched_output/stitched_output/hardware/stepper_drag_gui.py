@@ -894,19 +894,10 @@ class StepperDragGUI:
         self.object_detect_conf_var = tk.DoubleVar(value=0.25)
         self.object_detect_confidence_display_var = tk.StringVar(value="目前偵測信心值：尚無結果")
         self.wbc_subtype_conf_var = tk.DoubleVar(value=0.0)
-        default_detect_weight = PROJECT_ROOT / "models" / "wbc_focus_yolov8n_e_20260611.pt"
-        default_detect_model = (
-            str(default_detect_weight)
-            if default_detect_weight.exists()
-            else (
-                resolve_detect_model_path(PROJECT_ROOT, None)
-                if resolve_detect_model_path is not None
-                else "yolov8n.pt"
-            )
-        )
+        default_detect_model = ""
         self.object_detect_model_var = tk.StringVar(value=str(default_detect_model))
         self.object_detect_model_status_var = tk.StringVar(
-            value=f"目前模型: {Path(str(default_detect_model)).name}"
+            value="尚未選擇模型，請提供本機偵測模型"
         )
         self.wbc_subtype_model_var = tk.StringVar(value="")
         self.wbc_subtype_model_status_var = tk.StringVar(value="WBC 統一分類：White_Blood_Cell")
@@ -1245,7 +1236,7 @@ class StepperDragGUI:
         ttk.Button(detection_panel, text="選擇模型", command=self._choose_detect_model).grid(
             row=3, column=0, sticky=tk.W, padx=6, pady=(4, 4)
         )
-        ttk.Button(detection_panel, text="套用 WBC 模型", command=self._reset_detect_model_to_default).grid(
+        ttk.Button(detection_panel, text="清除模型", command=self._reset_detect_model_to_default).grid(
             row=3, column=1, columnspan=2, sticky=tk.W, padx=(8, 4), pady=(4, 4)
         )
         ttk.Label(detection_panel, textvariable=self.object_detect_model_status_var, wraplength=360).grid(
@@ -1301,7 +1292,7 @@ class StepperDragGUI:
         ).grid(row=10, column=0, columnspan=7, sticky=tk.W, pady=(6, 2))
         ttk.Label(
             cam_group,
-            text="注意：若使用通用 yolov8n.pt，細胞畫面通常不會有框；請改成細胞 detection 權重。",
+            text="MSH 不內附或下載模型；辨識前請選擇自己的本機偵測模型。",
         ).grid(row=11, column=0, columnspan=7, sticky=tk.W, pady=(2, 2))
 
         wbc_capture_group = ttk.LabelFrame(
@@ -3046,8 +3037,10 @@ class StepperDragGUI:
 
     def _resolve_detect_model_for_gui(self) -> str:
         requested = self.object_detect_model_var.get().strip() or None
+        if not requested:
+            return ""
         if resolve_detect_model_path is None:
-            return requested or "yolov8n.pt"
+            return requested
         return resolve_detect_model_path(PROJECT_ROOT, requested)
 
     def _resolve_wbc_subtype_model_for_gui(self) -> str | None:
@@ -3061,6 +3054,7 @@ class StepperDragGUI:
         if not selected:
             return
         self.object_detect_model_var.set(selected)
+        self._detector_unavailable_logged = False
         self.object_detect_model_status_var.set(f"目前模型: {Path(selected).name}（尚未載入）")
         with self._detector_lock:
             self._object_detector = None
@@ -3068,18 +3062,17 @@ class StepperDragGUI:
         self._append_log(f"已選擇偵測模型：{selected}")
 
     def _reset_detect_model_to_default(self) -> None:
-        if resolve_detect_model_path is None:
-            self._append_log("無法解析預設偵測模型。")
-            return
-        model_path = resolve_detect_model_path(PROJECT_ROOT, None)
-        self.object_detect_model_var.set(model_path)
-        self.object_detect_model_status_var.set(f"目前模型: {Path(model_path).name}")
+        self.object_detect_model_var.set("")
+        self.object_detect_model_status_var.set("尚未選擇模型，請提供本機偵測模型")
+        self._detector_unavailable_logged = False
         with self._detector_lock:
             self._object_detector = None
             self._object_detector_key = None
-        self._append_log(f"已套用預設 WBC 偵測模型：{model_path}")
+        self._append_log("已清除模型選擇；MSH 不內附模型。")
 
     def _describe_detect_model_status(self, model_path: str) -> tuple[str, tuple[int, int, int]]:
+        if not model_path or not Path(model_path).is_file():
+            return "Select your own local detection model", (0, 80, 255)
         normalized = model_path.replace("\\", "/").lower()
         filename = Path(model_path).name.lower()
         if "-cls" in filename or "/classify/" in normalized:
@@ -3106,6 +3099,9 @@ class StepperDragGUI:
 
         conf = self._get_detect_conf()
         model_path = self._resolve_detect_model_for_gui()
+        if not model_path or not Path(model_path).is_file():
+            self.object_detect_model_status_var.set("辨識未啟用：請先選擇自己的本機模型")
+            return None
         subtype_model_path = self._resolve_wbc_subtype_model_for_gui()
         subtype_conf = self._get_wbc_subtype_conf()
         key = (model_path, conf, subtype_model_path or "", subtype_conf)

@@ -4,7 +4,7 @@
 import os
 from pathlib import Path
 
-from msh_release_model import RELEASE_MODEL_RELATIVE_PATH
+from msh_distribution import application_files
 
 ROOT = Path(SPECPATH).resolve()
 YOLO_BUILD_CONFIG = ROOT / "build" / "ultralytics"
@@ -12,26 +12,23 @@ YOLO_BUILD_CONFIG.mkdir(parents=True, exist_ok=True)
 os.environ["YOLO_CONFIG_DIR"] = str(YOLO_BUILD_CONFIG)
 LEGACY_ROOT = ROOT / "stitched_output" / "stitched_output" / "stitched_output"
 HARDWARE_ROOT = LEGACY_ROOT / "hardware"
-WBC_RELEASE_MODEL = ROOT / RELEASE_MODEL_RELATIVE_PATH
-
-if not WBC_RELEASE_MODEL.is_file():
-    raise FileNotFoundError(
-        "Missing approved WBC release model: "
-        f"{WBC_RELEASE_MODEL}. Restore the external model before building MSH."
-    )
 
 datas = [
+    (str(ROOT / "LICENSE"), "."),
+    (str(ROOT / "THIRD_PARTY_NOTICES.md"), "."),
     (str(ROOT / "assets" / "msh-cyberpunk-splash-640.png"), "assets"),
     (str(ROOT / "assets" / "msh-cyberpunk-splash.png"), "assets"),
     (str(ROOT / "assets" / "msh-pixel-icon.ico"), "assets"),
     (str(ROOT / "assets" / "msh-pixel-icon.png"), "assets"),
-    (str(ROOT / "assets" / "branding" / "v1"), "assets/branding/v1"),
-    (str(ROOT / "cell_stitching_project"), "cell_stitching_project"),
-    (str(HARDWARE_ROOT), "stitched_output/stitched_output/stitched_output/hardware"),
-    (str(LEGACY_ROOT / "cell_identification"), "stitched_output/stitched_output/stitched_output/cell_identification"),
-    (str(WBC_RELEASE_MODEL), "stitched_output/stitched_output/stitched_output/models"),
-    (str(ROOT / "yolov8n.pt"), "stitched_output/stitched_output/stitched_output/models"),
 ]
+for subtree in (
+    "licenses",
+    "assets/branding/v1",
+    "cell_stitching_project",
+    "stitched_output/stitched_output/stitched_output/hardware",
+    "stitched_output/stitched_output/stitched_output/cell_identification",
+):
+    datas.extend(application_files(ROOT, subtree))
 binaries = []
 hiddenimports = [
     "arduino_stepper",
@@ -57,6 +54,24 @@ a = Analysis(
     excludes=[],
     noarchive=False,
 )
+# Dependency hooks can collect demo photos, datasets or optional weights.
+weight_suffixes = {".pt", ".pth", ".ckpt", ".onnx", ".engine", ".safetensors", ".tflite", ".h5", ".keras", ".pb", ".weights", ".omc", ".caffemodel"}
+excluded_resource_prefixes = (
+    "ultralytics/assets/",
+    "matplotlib/mpl-data/sample_data/",
+    "pypylon/pylondataprocessingplugins/",
+    "pypylon/dataprocessingpluginsb/",
+    "pypylon/docs/",
+)
+a.datas = [
+    entry for entry in a.datas
+    if Path(entry[0]).suffix.lower() not in weight_suffixes
+    and not entry[0].replace("\\", "/").lower().startswith(excluded_resource_prefixes)
+]
+a.binaries = [
+    entry for entry in a.binaries
+    if not entry[0].replace("\\", "/").lower().startswith(excluded_resource_prefixes)
+]
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz,

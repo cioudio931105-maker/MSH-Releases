@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model
+
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
@@ -107,7 +109,7 @@ class WBCSubtypeClassifier:
             raise RuntimeError("ultralytics is not installed; WBC subtype model cannot be loaded.")
         self.model_path = str(model_path)
         self.min_confidence = float(max(0.0, min(1.0, min_confidence)))
-        self._model = YOLO(self.model_path)
+        self._model = YOLO(require_local_model(self.model_path))
 
     def classify(self, crop_bgr: np.ndarray) -> tuple[str, float] | None:
         if crop_bgr.size == 0:
@@ -152,7 +154,7 @@ def _name_from_id(names: Any, cls_id: int) -> str:
 class ObjectDetector:
     def __init__(
         self,
-        model_path: str = "yolov8n.pt",
+        model_path: str = "",
         conf_threshold: float = 0.25,
         iou_threshold: float = 0.45,
         max_det: int = 300,
@@ -172,7 +174,7 @@ class ObjectDetector:
         if YOLO is None:
             raise RuntimeError("ultralytics is not installed; object detection model cannot be loaded.")
         if self._model is None:
-            self._model = YOLO(self.model_path)
+            self._model = YOLO(require_local_model(self.model_path))
         return self._model
 
     def _ensure_wbc_subtype_classifier(self) -> WBCSubtypeClassifier | None:
@@ -387,4 +389,4 @@ def resolve_detect_model_path(project_root: Path, requested: str | None = None) 
         fallback = sorted(detect_runs_root.glob("**/weights/last.pt"))
         if fallback:
             return str(fallback[-1])
-    return "yolov8n.pt"
+    return ""

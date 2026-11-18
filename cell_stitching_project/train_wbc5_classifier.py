@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model, local_training_options
+
 import argparse
 from pathlib import Path
 
@@ -69,7 +71,6 @@ def train_wbc5_classifier(args: argparse.Namespace) -> Path | None:
         "optimizer": str(args.optimizer),
         "lr0": float(args.lr0),
         "seed": int(args.seed),
-        "pretrained": True,
         "cache": bool(args.cache),
     }
     if args.device is not None:
@@ -89,8 +90,8 @@ def train_wbc5_classifier(args: argparse.Namespace) -> Path | None:
     except ImportError as exc:
         raise ImportError("Ultralytics is required for YOLO classification training.") from exc
 
-    model = YOLO(str(args.model))
-    result = model.train(**train_kwargs)
+    model = YOLO(require_local_model(str(args.model)))
+    result = model.train(**(train_kwargs | local_training_options(args.model)))
     save_dir = Path(getattr(result, "save_dir", Path(args.project) / str(args.name)))
     best_path = save_dir / "weights" / "best.pt"
     print(f"best_model={best_path.resolve()}")

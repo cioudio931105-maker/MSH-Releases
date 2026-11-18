@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model, local_training_options
+
 import argparse
 from datetime import datetime
 from pathlib import Path
@@ -105,7 +107,6 @@ def train_manual_capture_3cls(args: argparse.Namespace) -> Path | None:
         "lr0": float(args.lr0),
         "cos_lr": True,
         "seed": int(args.seed),
-        "pretrained": True,
         "device": device,
         "cache": False,
         "mosaic": 0.05,
@@ -128,8 +129,8 @@ def train_manual_capture_3cls(args: argparse.Namespace) -> Path | None:
     except ImportError as exc:
         raise ImportError("Ultralytics is required for YOLO training.") from exc
 
-    model = YOLO(str(model_path))
-    result = model.train(**train_kwargs)
+    model = YOLO(require_local_model(str(model_path)))
+    result = model.train(**(train_kwargs | local_training_options(model_path)))
     save_dir = Path(getattr(result, "save_dir", Path(args.project) / str(args.name)))
     best_path = save_dir / "weights" / "best.pt"
     print_training_artifacts(save_dir)

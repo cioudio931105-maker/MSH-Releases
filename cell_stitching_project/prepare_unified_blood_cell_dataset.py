@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model
+
 import argparse
 import csv
 import json
@@ -226,7 +228,7 @@ def prepare_unified_dataset(args: argparse.Namespace) -> Path:
     except ImportError as exc:
         raise ImportError("Ultralytics is required to pseudo-label WBC subtypes.") from exc
 
-    wbc_model = YOLO(str(args.wbc_classifier))
+    wbc_model = YOLO(require_local_model(str(args.wbc_classifier)))
     pseudo_rows: list[dict[str, Any]] = []
     summary: dict[str, Any] = {
         "classes": list(UNIFIED_BLOOD_CELL_CLASS_NAMES),

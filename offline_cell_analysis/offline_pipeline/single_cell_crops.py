@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .model_files import require_local_model
+
 import csv
 import math
 from dataclasses import dataclass
@@ -125,7 +127,7 @@ def configure_models(
     if not detection_model_path.exists():
         raise FileNotFoundError(f"Detection model not found: {detection_model_path}")
 
-    _DETECTION_MODEL = YOLO(str(detection_model_path))
+    _DETECTION_MODEL = YOLO(require_local_model(str(detection_model_path)))
     _DETECTION_CONFIDENCE = float(confidence)
     _WBC_CONFIDENCE = float(wbc_confidence)
     _DEVICE = _resolve_device(device)
@@ -135,7 +137,7 @@ def configure_models(
     if wbc_classifier_path is None:
         wbc_classifier_path = find_default_wbc_classifier()
     if wbc_classifier_path is not None and Path(wbc_classifier_path).exists():
-        _WBC_CLASSIFIER = YOLO(str(wbc_classifier_path))
+        _WBC_CLASSIFIER = YOLO(require_local_model(str(wbc_classifier_path)))
         print(f"Loaded WBC subtype classifier: {wbc_classifier_path}", flush=True)
     else:
         _WBC_CLASSIFIER = None

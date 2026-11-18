@@ -52,7 +52,7 @@ def _create_object_detector(model_path: str | None, conf: float) -> Optional[Obj
     if ObjectDetector is None:
         return None
     try:
-        resolved = resolve_detect_model_path(PROJECT_ROOT, model_path) if resolve_detect_model_path else (model_path or 'yolov8n.pt')
+        resolved = resolve_detect_model_path(PROJECT_ROOT, model_path) if resolve_detect_model_path else (model_path or '')
         return ObjectDetector(model_path=resolved, conf_threshold=float(conf))
     except Exception as exc:
         logging.warning('Object detector init failed: %s', exc)

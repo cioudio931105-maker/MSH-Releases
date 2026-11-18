@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model, local_training_options
+
 import argparse
 import shutil
 from datetime import datetime
@@ -56,7 +58,7 @@ def main() -> int:
     device = resolve_device(args.device)
     print(f"Training device: {device}")
 
-    model = YOLO(str(args.model))
+    model = YOLO(require_local_model(str(args.model)))
     result = model.train(
         data=str(args.data),
         epochs=args.epochs,
@@ -67,7 +69,7 @@ def main() -> int:
         project=str(args.project),
         name=args.name,
         exist_ok=True,
-        pretrained=True,
+        **local_training_options(args.model),
         optimizer="AdamW",
         lr0=0.0008,
         lrf=0.01,

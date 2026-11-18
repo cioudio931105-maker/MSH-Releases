@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model
+
 import argparse
 import shutil
 from pathlib import Path
@@ -40,7 +42,7 @@ def collect_hard_examples(args: argparse.Namespace) -> Path:
     class_names = load_class_names(args.class_file) if args.class_file else []
     include_labels = {label.strip() for label in args.include_label if label.strip()}
 
-    model = YOLO(str(args.model))
+    model = YOLO(require_local_model(str(args.model)))
     manifest: list[dict[str, object]] = []
     for image_path in source_paths:
         results = model.predict(

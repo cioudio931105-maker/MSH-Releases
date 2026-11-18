@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model
+
 import csv
 from pathlib import Path
 from typing import Iterable
@@ -43,11 +45,11 @@ def resolve_model_path(model_path: str | None = None) -> str:
     if discovered:
         return discovered
 
-    return "yolov8n-cls.pt"
+    return ""
 
 
 def load_model(model_path: str | None = None) -> YOLO:
-    return YOLO(resolve_model_path(model_path))
+    return YOLO(require_local_model(resolve_model_path(model_path)))
 
 
 def collect_images(source: str | Path) -> list[str]:

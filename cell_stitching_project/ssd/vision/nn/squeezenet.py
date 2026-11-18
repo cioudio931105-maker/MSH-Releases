@@ -107,11 +107,11 @@ def squeezenet1_0(pretrained=False, **kwargs):
     <https://arxiv.org/abs/1602.07360>`_ paper.
 
     Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        pretrained (bool): Must be False; load user-supplied local weights separately.
     """
-    model = SqueezeNet(version=1.0, **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['squeezenet1_0']))
+        raise ValueError("MSH does not supply or download models; load your own local state_dict.")
+    model = SqueezeNet(version=1.0, **kwargs)
     return model
 
 
@@ -122,9 +122,9 @@ def squeezenet1_1(pretrained=False, **kwargs):
     than SqueezeNet 1.0, without sacrificing accuracy.
 
     Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
+        pretrained (bool): Must be False; load user-supplied local weights separately.
     """
-    model = SqueezeNet(version=1.1, **kwargs)
     if pretrained:
-        model.load_state_dict(model_zoo.load_url(model_urls['squeezenet1_1']))
+        raise ValueError("MSH does not supply or download models; load your own local state_dict.")
+    model = SqueezeNet(version=1.1, **kwargs)
     return model

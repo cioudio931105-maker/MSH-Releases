@@ -1,5 +1,8 @@
 # MSH v0.1.1 release model record
 
+Historical record only. Current MSH supplies no weights; this model is no longer
+a build prerequisite. See `docs/APPLICATION_ONLY_POLICY.md`.
+
 ## Model identity
 
 - File: `wbc_focus_yolov8n_e_20260611.pt`

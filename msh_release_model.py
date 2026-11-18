@@ -1,4 +1,4 @@
-"""Approved external model identity for the current MSH review release."""
+"""Historical v0.1.1 identity only; current MSH builds include no models."""
 
 from pathlib import Path
 

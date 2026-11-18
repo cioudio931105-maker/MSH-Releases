@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model
+
 import os
 from pathlib import Path
 
@@ -27,11 +29,11 @@ def detect_and_classify(
     conf_threshold: float = 0.25,
     save_dir: str = "runs/detect_classify",
 ):
-    detect_model_path = detect_model_path or "yolov8n.pt"
+    detect_model_path = require_local_model(detect_model_path)
     classify_model_path = resolve_classification_model_path(classify_model_path)
 
     print(f"Loading detect model: {detect_model_path}")
-    detect_model = YOLO(detect_model_path)
+    detect_model = YOLO(require_local_model(detect_model_path))
     print(f"Loading classify model: {classify_model_path}")
     classify_model = load_classification_model(classify_model_path)
 

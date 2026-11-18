@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model
+
 import math
 import re
 from dataclasses import dataclass, field
@@ -42,7 +44,7 @@ class YoloGuidance:
     """Optional YOLO wrapper used only for ROI guidance and debug overlays."""
 
     def __init__(self, model_path: str | None, confidence: float, expand_ratio: float, device: str | int = "auto") -> None:
-        self.model_path = model_path or "yolov8n.pt"
+        self.model_path = model_path or ""
         self.confidence = float(confidence)
         self.expand_ratio = float(expand_ratio)
         self.device = str(device)
@@ -57,7 +59,7 @@ class YoloGuidance:
             return
 
         try:
-            self._model = YOLO(self.model_path)
+            self._model = YOLO(require_local_model(self.model_path))
             self.available = True
         except Exception as exc:  # pragma: no cover - depends on environment
             self.warning = f"Failed to load YOLO model '{self.model_path}': {exc}"

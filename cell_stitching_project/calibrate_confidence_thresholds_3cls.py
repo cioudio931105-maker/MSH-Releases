@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model
+
 import argparse
 import csv
 import json
@@ -224,7 +226,7 @@ def main() -> int:
     if not images:
         raise FileNotFoundError(f"No images found: {image_dir}")
 
-    model = YOLO(str(args.model))
+    model = YOLO(require_local_model(str(args.model)))
     records: list[tuple[list[Box], list[Box]]] = []
     for image_path in images:
         truth = load_ground_truth(image_path, label_dir)

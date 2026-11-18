@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from .model_files import require_local_model, local_training_options
+
 import csv
 import json
 import random
@@ -306,7 +308,7 @@ def train_three_class_model(
         "optimizer": "AdamW",
         "lr0": 0.00025,
         "cos_lr": True,
-        "pretrained": True,
+
         "cache": False,
         "mosaic": 0.05,
         "mixup": 0.0,
@@ -336,7 +338,7 @@ def train_three_class_model(
     except ImportError as exc:
         raise RuntimeError("ultralytics is required for training.") from exc
 
-    model = YOLO(str(base_model))
-    result = model.train(**train_kwargs)
+    model = YOLO(require_local_model(str(base_model)))
+    result = model.train(**(train_kwargs | local_training_options(base_model)))
     save_dir = Path(getattr(result, "save_dir", Path(project) / name))
     return save_dir / "weights" / "best.pt"

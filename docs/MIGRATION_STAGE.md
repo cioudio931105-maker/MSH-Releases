@@ -1,6 +1,6 @@
 # Workstage migration snapshot
 
-Stage: `eccb6786778612b9f003cab0edb068fd509db231`
+Stage: `72cc5cc32c80ebf308ba269fdd9c6af77705e5c5`
 
 Only application files are retained here. Original data, weights, camera profiles and environments remain in their original private/local locations. This is a preserved workstage, not proof of completion or hardware acceptance. Do not publish binaries or merge experimental hardware code without review.
 

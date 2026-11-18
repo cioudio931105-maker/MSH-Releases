@@ -1,20 +1,22 @@
-# Cell_Project 一頁式交付 SOP
+# MSH 原始碼環境交付 SOP
+
+> 這是開發／原始碼環境參考，不是一般使用者的安裝方法。
+> 一般使用者請依 [MSH 直接安裝與往後發佈流程](DIRECT_INSTALL_RELEASE_WORKFLOW_zh_TW.md) 下載安裝檔。
+> 現行交付不包含模型或研究資料；模型由使用者提供，舊版 IncludeModels 等參數已停用。
 
 ## 1. 交付內容
 
 請提供對方以下內容：
 
 - `Cell_Project` 專案完整資料夾
-- 模型檔
+- 模型由使用者自行保存與提供，不隨專案交付
 - legacy GUI 與硬體控制檔
 
 若要打包成 zip：
 
 ```powershell
 .\package_for_transfer.ps1 `
-  -Destination "E:\Cell_Project_portable.zip" `
-  -IncludeModels `
-  -IncludeStitchedOutput
+  -Destination "E:\Cell_Project_portable.zip"
 ```
 
 ## 2. 新機安裝
@@ -150,6 +152,6 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 ## 9. 文件位置
 
-- 安裝與更新詳版：[INSTALL_UPDATE_GUIDE.md](/C:/Cell_Project/Cell_Project/docs/INSTALL_UPDATE_GUIDE.md)
-- 新機建置詳版：[NEW_MACHINE_SETUP.md](/C:/Cell_Project/Cell_Project/docs/NEW_MACHINE_SETUP.md)
-- 專案地圖：[PROJECT_MAP.md](/C:/Cell_Project/Cell_Project/docs/PROJECT_MAP.md)
+- 安裝與更新詳版：[INSTALL_UPDATE_GUIDE.md](INSTALL_UPDATE_GUIDE.md)
+- 新機建置詳版：[NEW_MACHINE_SETUP.md](NEW_MACHINE_SETUP.md)
+- 專案地圖：[PROJECT_MAP.md](PROJECT_MAP.md)

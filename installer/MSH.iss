@@ -1,6 +1,6 @@
 #define MyAppName "MSH"
 #ifndef MyAppVersion
-  #define MyAppVersion "0.1.3"
+  #define MyAppVersion "0.1.4"
 #endif
 #ifndef MyBuildDir
   #define MyBuildDir "..\dist\cpu\MSH"

@@ -1,13 +1,19 @@
-MSH v0.1.3 is a client-review update. It has not
-been publicly released or code-signed. Windows or antivirus software may show
-an unknown-publisher warning.
+MSH is a Windows desktop application. Check the release page for the exact
+version, validation status, signature information and installer SHA-256.
+Unsigned review builds may show an unknown-publisher warning; install only
+from an authorized source after checking its published checksum.
 
 MSH runs locally and does not upload microscope images, CSV, JSON, or scan data.
 
 For Basler cameras, install the official Basler pylon Runtime/driver for the
-camera interface before using camera features. This application does not modify
+camera interface before using camera features. This installer does not modify
 COM ports, motor parameters, scan bounds, camera serial numbers, or PFS profiles.
 
-This review build includes the approved WBC-only detection model
-`wbc_focus_yolov8n_e_20260611.pt`. It draws WBC bounding boxes but does not
-classify WBC subtypes and must not be treated as clinical validation.
+This build includes no detection/classification model, research images,
+annotations or datasets. Supply your own compatible local model and choose
+it in MSH before AI recognition. MSH does not download a fallback model.
+An installer or successful model load is not clinical or hardware validation.
+
+When migrating from an older build that bundled models, back up your models,
+data and settings before removing the old application. Do not assume an
+in-place update removes old bundled files or validates firmware compatibility.

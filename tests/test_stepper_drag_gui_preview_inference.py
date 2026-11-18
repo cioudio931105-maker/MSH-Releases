@@ -8,6 +8,7 @@ import time
 from dataclasses import dataclass
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 import numpy as np
@@ -43,6 +44,33 @@ class _PreviewDetection:
 
 
 class PreviewInferenceTests(unittest.TestCase):
+    def test_no_model_selection_does_not_discover_or_load_a_model(self) -> None:
+        gui = GUI_MODULE.StepperDragGUI.__new__(GUI_MODULE.StepperDragGUI)
+        gui.object_detect_model_var = Mock()
+        gui.object_detect_model_var.get.return_value = ""
+        with patch.object(GUI_MODULE, "resolve_detect_model_path") as resolver:
+            self.assertEqual(gui._resolve_detect_model_for_gui(), "")
+            resolver.assert_not_called()
+        gui.object_detect_model_status_var = Mock()
+        gui._get_detect_conf = lambda: 0.25
+        with patch.object(GUI_MODULE, "ObjectDetector") as detector:
+            self.assertIsNone(gui._get_object_detector())
+            detector.assert_not_called()
+        gui.object_detect_model_status_var.set.assert_called_once()
+
+    def test_clear_model_discards_cached_detector(self) -> None:
+        gui = GUI_MODULE.StepperDragGUI.__new__(GUI_MODULE.StepperDragGUI)
+        gui.object_detect_model_var = Mock()
+        gui.object_detect_model_status_var = Mock()
+        gui._detector_lock = threading.Lock()
+        gui._object_detector = object()
+        gui._object_detector_key = ("old-model.pt",)
+        gui._append_log = Mock()
+        gui._reset_detect_model_to_default()
+        gui.object_detect_model_var.set.assert_called_once_with("")
+        self.assertIsNone(gui._object_detector)
+        self.assertIsNone(gui._object_detector_key)
+
     def _gui_without_tk(self):
         gui = GUI_MODULE.StepperDragGUI.__new__(GUI_MODULE.StepperDragGUI)
         gui._preview_inference_stop = threading.Event()

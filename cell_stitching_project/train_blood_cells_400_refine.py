@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model, local_training_options
+
 import argparse
 from pathlib import Path
 
@@ -80,7 +82,6 @@ def refine_blood_cells_400(args: argparse.Namespace) -> Path | None:
         "cos_lr": True,
         "close_mosaic": int(args.close_mosaic),
         "seed": int(args.seed),
-        "pretrained": True,
         "cache": bool(args.cache),
         "mosaic": float(args.mosaic),
         "mixup": float(args.mixup),
@@ -108,8 +109,8 @@ def refine_blood_cells_400(args: argparse.Namespace) -> Path | None:
     except ImportError as exc:
         raise ImportError("Ultralytics is required for YOLO refinement.") from exc
 
-    model = YOLO(str(model_path))
-    result = model.train(**train_kwargs)
+    model = YOLO(require_local_model(str(model_path)))
+    result = model.train(**(train_kwargs | local_training_options(model_path)))
     save_dir = Path(getattr(result, "save_dir", Path(args.project) / str(args.name)))
     best_path = save_dir / "weights" / "best.pt"
     print(f"best_model={best_path.resolve()}")

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model, local_training_options
+
 import random
 import shutil
 from dataclasses import dataclass
@@ -153,7 +155,7 @@ def resolve_base_model(model_path: str | None = None) -> str:
     latest = find_model()
     if latest:
         return latest
-    return "yolov8n-cls.pt"
+    return ""
 
 
 def train_classification(
@@ -169,7 +171,7 @@ def train_classification(
     device: str = "",
 ):
     """Train a YOLO classification model with microscope-friendly augmentation."""
-    model = YOLO(resolve_base_model(model_path))
+    model = YOLO(require_local_model(resolve_base_model(model_path)))
     kwargs = {
         "data": str(data_dir),
         "epochs": int(epochs),
@@ -194,4 +196,5 @@ def train_classification(
     }
     if device:
         kwargs["device"] = device
-    return model.train(**kwargs)
+
+    return model.train(**(kwargs | local_training_options(resolve_base_model(model_path))))

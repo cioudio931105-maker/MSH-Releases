@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from msh_model_policy import require_local_model
+
 import argparse
 import csv
 import shutil
@@ -159,7 +161,7 @@ def main() -> int:
     images = discover_images(args.source_root)
     if args.max_images > 0:
         images = images[: args.max_images]
-    model = YOLO(str(args.model))
+    model = YOLO(require_local_model(str(args.model)))
 
     manifest_path = args.output_root / "pseudo_label_manifest.csv"
     counts = {0: 0, 1: 0, 2: 0}
