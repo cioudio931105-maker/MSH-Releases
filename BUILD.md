@@ -17,6 +17,15 @@ environments.
 .\scripts\build_release.ps1 -Runtime cpu -PythonPath .\.venv312-cpu\Scripts\python.exe
 ```
 
+To build and finalize the same bundle for its HTTPS download origin in one
+command, add `-PublicBaseUrl`, for example:
+
+```powershell
+.\scripts\build_release.ps1 -Runtime cpu `
+  -PythonPath .\.venv312-cpu\Scripts\python.exe `
+  -PublicBaseUrl https://downloads.example.org/msh
+```
+
 The CPU build creates an onedir application at `dist\cpu\MSH\` and
 `dist\release\v<version>\MSH_Setup_v<version>_CPU.exe` plus its SHA-256 checksum and
 `MSH_Setup_v<version>_CPU.exe.build-manifest.json`. The manifest records the Git commit,
@@ -56,6 +65,16 @@ review release:
 
 The updater only opens the download after user confirmation. It does not execute
 the unsigned installer or replace running application files.
+
+GitHub Releases are not required by the update protocol. The private Git
+repository may remain private while installers and `latest.json` are served from
+a separate HTTPS object-storage bucket. See
+[`docs/RELEASE_STORAGE_AND_SYNC.md`](docs/RELEASE_STORAGE_AND_SYNC.md). Pass
+`-PublicBaseUrl` to the build command to validate the single version bundle,
+generate its immutable release record, and create the provider-neutral
+`latest.json`; alternatively run `scripts/finalize_release_bundle.ps1` afterward.
+Do not keep duplicate desktop archives after the bundle has been uploaded and
+independently verified.
 
 Do not run `ISCC.exe` directly for a release. Only `scripts\build_release.ps1` creates
 the build manifest and guarantees that the installer source came from the same fresh

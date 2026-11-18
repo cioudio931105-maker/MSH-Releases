@@ -11,7 +11,7 @@
 9. Install and uninstall `MSH_Setup_v<version>_CPU.exe`; confirm Documents and LocalAppData user data remain.
 10. Perform only authorised B-site hardware checks for Basler, COM, Arduino, XY stage, and scanning.
 11. Review the generated SHA-256 file and code-sign only with a valid certificate.
-12. Create Git tag `v<version>` and GitHub Release `Microscope Scanner Helper v<version>`.
-13. Upload the installer, `.sha256`, and `.build-manifest.json`; mark pre-release until all required smoke and hardware tests pass.
-14. Copy `release/latest.example.json`, enter the exact release URLs and post-build SHA-256, validate the JSON, and publish it as `latest.json` in the public release-only repository.
+12. Run the build with `-PublicBaseUrl`, or run `scripts\finalize_release_bundle.ps1` afterward. Confirm the version folder contains release notes, `latest.json`, and `release-record.json`.
+13. Upload the one immutable version folder to the configured binary store. A GitHub Release is optional; a public object-storage bucket may be used while source Git remains private.
+14. Independently download the public installer, verify its SHA-256, then publish the generated `latest.json` at the storage root as the final update switch.
 15. From the previous installed version, use **說明 > 檢查更新...**, confirm the displayed version/hash, download the new installer, and verify that overwrite installation preserves local settings and user data.

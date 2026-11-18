@@ -4,7 +4,9 @@ param(
     [ValidateSet("cpu", "gpu")]
     [string]$Runtime = "cpu",
     [switch]$Candidate,
-    [switch]$SkipInstaller
+    [switch]$SkipInstaller,
+    [string]$PublicBaseUrl = "",
+    [string]$ReleasePageUrl = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,6 +28,10 @@ if ($torchRuntime -ne $Runtime) {
 }
 $version = (& $python -c "from msh_version import __version__; print(__version__)").Trim()
 if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') { throw "msh_version.py 的版本格式無效：$version" }
+$releaseNotes = Join-Path $projectRoot "RELEASE_NOTES_v$version.md"
+if (-not (Test-Path -LiteralPath $releaseNotes -PathType Leaf)) {
+    throw "缺少版本專屬 release notes：$releaseNotes"
+}
 $releaseModelRelativePath = (& $python -c "from msh_release_model import RELEASE_MODEL_RELATIVE_PATH; print(RELEASE_MODEL_RELATIVE_PATH)").Trim()
 $expectedReleaseModelHash = (& $python -c "from msh_release_model import RELEASE_MODEL_SHA256; print(RELEASE_MODEL_SHA256)").Trim().ToLowerInvariant()
 $releaseModel = Join-Path $projectRoot $releaseModelRelativePath
@@ -151,6 +157,17 @@ try {
     $hash = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
     Set-Content -LiteralPath "$installer.sha256" -Value "$hash *$(Split-Path -Leaf $installer)" -Encoding ascii
     Copy-Item -LiteralPath $buildManifestPath -Destination "$installer.build-manifest.json" -Force
+    Copy-Item -LiteralPath $releaseNotes -Destination (Join-Path (Split-Path -Parent $installer) (Split-Path -Leaf $releaseNotes))
+    if (-not [string]::IsNullOrWhiteSpace($PublicBaseUrl)) {
+        $finalizeArguments = @{
+            BundleDirectory = Split-Path -Parent $installer
+            PublicBaseUrl = $PublicBaseUrl
+        }
+        if (-not [string]::IsNullOrWhiteSpace($ReleasePageUrl)) {
+            $finalizeArguments.ReleasePageUrl = $ReleasePageUrl
+        }
+        & (Join-Path $PSScriptRoot "finalize_release_bundle.ps1") @finalizeArguments
+    }
     Write-Host "Installer: $installer"
     Write-Host "Checksum: $installer.sha256"
     Write-Host "Build manifest: $installer.build-manifest.json"
