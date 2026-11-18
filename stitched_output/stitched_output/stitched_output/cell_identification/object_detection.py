@@ -255,6 +255,9 @@ def annotate_detections(
     detections: list[Detection],
     show_conf: bool = True,
     color: tuple[int, int, int] = (0, 255, 0),
+    font_scale: float = 0.55,
+    box_thickness: int = 2,
+    text_thickness: int = 2,
 ) -> np.ndarray:
     annotated = frame.copy()
     for det in detections:
@@ -265,22 +268,22 @@ def annotate_detections(
         if x2 <= x1 or y2 <= y1:
             continue
 
-        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, 2)
+        cv2.rectangle(annotated, (x1, y1), (x2, y2), color, box_thickness)
         label_text = det.display_label if hasattr(det, "display_label") else det.label
         if show_conf and getattr(det, "wbc_subtype_conf", None) is not None:
             label = f"{label_text} {det.conf:.2f}/{float(det.wbc_subtype_conf):.2f}"
         else:
             label = label_text if not show_conf else f"{label_text} {det.conf:.2f}"
-        tw, th, baseline = get_text_size(label, font_scale=0.55, thickness=2)
+        tw, th, baseline = get_text_size(label, font_scale=font_scale, thickness=text_thickness)
         top = max(0, y1 - th - baseline - 8)
         cv2.rectangle(annotated, (x1, top), (x1 + tw, y1), color, -1)
         put_text(
             annotated,
             label,
             (x1, max(12, y1 - 4)),
-            0.55,
+            font_scale,
             (0, 0, 0),
-            2,
+            text_thickness,
         )
     return annotated
 

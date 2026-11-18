@@ -163,20 +163,22 @@ except Exception:
 _PREVIEW_WINDOW_NAME = "Basler Live Preview"
 _PREVIEW_WINDOW_WIDTH = 960
 _PREVIEW_WINDOW_HEIGHT = 540
-_EMBEDDED_PREVIEW_MAX_WIDTH = 360
-_EMBEDDED_PREVIEW_MAX_HEIGHT = 240
+_EMBEDDED_PREVIEW_MAX_WIDTH = 480
+_EMBEDDED_PREVIEW_MAX_HEIGHT = 320
 _EMBEDDED_PREVIEW_PLACEHOLDER_SIZE = 128
+_PREVIEW_VIEW_ZOOM_STEP = 1.25
+_PREVIEW_VIEW_MAX_ZOOM = 16.0
 _PREVIEW_PROCESS_MAX_LONG_SIDE = 768
+_PREVIEW_OVERLAY_FONT_SCALE = 2.8
+_PREVIEW_OVERLAY_TEXT_THICKNESS = 7
+_PREVIEW_OVERLAY_BOX_THICKNESS = 6
+_PREVIEW_OVERLAY_MARGIN = 28
+_PREVIEW_OVERLAY_LINE_HEIGHT = 86
 _CAPTURE_SAVE_MAX_LONG_SIDE = 1536
 _CAPTURE_PNG_COMPRESSION = 1
 _BASLER_PREVIEW_FPS = 20.0
 _BASLER_PREVIEW_EXPOSURE_UPPER_US = 50000.0
 _BASLER_PREVIEW_EXPOSURE_LOWER_US = 100.0
-_PYLON_AUTO_TARGET_BRIGHTNESS = 0.30196
-_PYLON_AUTO_EXPOSURE_LOWER_US = 8.0
-_PYLON_AUTO_EXPOSURE_UPPER_US = 1_000_000.0
-_PYLON_AUTO_GAIN_LOWER_DB = 0.0
-_PYLON_AUTO_GAIN_UPPER_DB = 36.0
 _DEFAULT_X_BACKLASH_STEPS = 60
 _DEFAULT_Y_BACKLASH_STEPS = 60
 _NORMAL_MOTOR_SPEED_MS = 5
@@ -825,7 +827,7 @@ class StepperDragGUI:
             self.root.iconphoto(True, self._window_icon_image)
         self._window_icon_handles = _apply_windows_window_icon(self.root, icon_path)
         self._window_chrome_applied = _apply_windows_window_chrome(self.root)
-        window_width, window_height = 860, 720
+        window_width, window_height = 1040, 780
         frame_width, frame_height = window_width, window_height
         if os.name == "nt":
             try:
@@ -865,15 +867,6 @@ class StepperDragGUI:
         self._manual_motion_generation: dict[int, int] = {0: 0, 1: 0}
         self._manual_motion_direction: dict[int, Optional[int]] = {0: None, 1: None}
         self.camera_index_var = tk.IntVar(value=-1)
-        # A PFS profile can be camera-specific. Never auto-apply a development
-        # machine profile on another user's device; let the user choose it.
-        self.pylon_profile_path_var = tk.StringVar(value="")
-        self.pylon_profile_display_var = tk.StringVar()
-        self.pylon_profile_path_var.trace_add("write", lambda *_args: self._update_pylon_profile_display())
-        self._update_pylon_profile_display()
-        self.use_pylon_profile_var = tk.BooleanVar(value=False)
-        self.pylon_profile_raw_frame_var = tk.BooleanVar(value=False)
-        self._pylon_profile_loaded = False
         self.auto_cycles_var = tk.IntVar(value=0)
         self.auto_interval_ms_var = tk.IntVar(value=500)
         self.capture_count_var = tk.StringVar(value="500")
@@ -899,6 +892,7 @@ class StepperDragGUI:
         self.object_detect_preview_var = tk.BooleanVar(value=True)
         self.object_detect_save_var = tk.BooleanVar(value=True)
         self.object_detect_conf_var = tk.DoubleVar(value=0.25)
+        self.object_detect_confidence_display_var = tk.StringVar(value="目前偵測信心值：尚無結果")
         self.wbc_subtype_conf_var = tk.DoubleVar(value=0.0)
         default_detect_weight = PROJECT_ROOT / "models" / "wbc_focus_yolov8n_e_20260611.pt"
         default_detect_model = (
@@ -949,6 +943,12 @@ class StepperDragGUI:
         self._preview_display_frame_widget: Optional[tk.Frame] = None
         self._preview_placeholder_image: Optional[tk.PhotoImage] = None
         self._preview_photo_image: Optional[tk.PhotoImage] = None
+        self._preview_view_window: Optional[tk.Toplevel] = None
+        self._preview_view_canvas: Optional[tk.Canvas] = None
+        self._preview_view_photo_image: Optional[tk.PhotoImage] = None
+        self._preview_view_zoom = 1.0
+        self._preview_view_center = (0.5, 0.5)
+        self._preview_view_drag_start: Optional[tuple[int, int]] = None
         self.preview_display_status_var = tk.StringVar(value="尚未開始預覽")
 
         self._auto_running = False
@@ -1173,14 +1173,14 @@ class StepperDragGUI:
 
         preview_frame = tk.Frame(
             preview_workspace,
-            width=_EMBEDDED_PREVIEW_PLACEHOLDER_SIZE,
-            height=_EMBEDDED_PREVIEW_PLACEHOLDER_SIZE,
+            width=_EMBEDDED_PREVIEW_MAX_WIDTH,
+            height=_EMBEDDED_PREVIEW_MAX_HEIGHT,
             bg="#071627",
             highlightthickness=1,
             highlightbackground="#00D7E8",
         )
         preview_frame.grid(row=0, column=0, sticky=tk.N, padx=(8, 6), pady=8)
-        preview_frame.grid_propagate(False)
+        preview_frame.pack_propagate(False)
         self._preview_display_frame_widget = preview_frame
         self._preview_display_label = tk.Label(
             preview_frame,
@@ -1212,58 +1212,48 @@ class StepperDragGUI:
 
         preview_controls = ttk.Frame(preview_workspace)
         preview_controls.grid(row=0, column=1, rowspan=2, sticky=tk.NSEW, padx=(6, 8), pady=8)
+        preview_controls.columnconfigure(0, weight=1)
         ttk.Label(preview_controls, text="預覽控制").grid(row=0, column=0, columnspan=3, sticky=tk.W)
         ttk.Button(preview_controls, text="開始預覽", command=self._start_preview).grid(row=1, column=0, sticky=tk.W, pady=(4, 0))
         ttk.Button(preview_controls, text="停止預覽", command=self._stop_preview).grid(row=1, column=1, sticky=tk.W, padx=(6, 0), pady=(4, 0))
         ttk.Button(preview_controls, text="拍照", command=self._capture_frame).grid(row=1, column=2, sticky=tk.W, padx=(6, 0), pady=(4, 0))
         ttk.Button(preview_controls, text="開啟輸出資料夾", command=self._open_output_folder).grid(
-            row=2, column=0, columnspan=2, sticky=tk.W, pady=(6, 0)
+            row=2, column=0, columnspan=3, sticky=tk.W, pady=(6, 0)
         )
-        ttk.Button(preview_controls, text="自動畫質", command=self._apply_automatic_image_adjustment).grid(
-            row=2, column=2, sticky=tk.W, padx=(6, 0), pady=(6, 0)
+        ttk.Button(preview_controls, text="放大檢視", command=self._open_preview_view).grid(
+            row=3, column=0, columnspan=2, sticky=tk.W, pady=(6, 0)
+        )
+        ttk.Button(preview_controls, text="重設檢視", command=self._reset_preview_view).grid(
+            row=3, column=2, sticky=tk.W, padx=(6, 0), pady=(6, 0)
         )
 
         detection_panel = ttk.LabelFrame(preview_controls, text="預覽物件辨識")
-        detection_panel.grid(row=3, column=0, columnspan=3, sticky=tk.EW, pady=(10, 0))
+        detection_panel.grid(row=4, column=0, columnspan=3, sticky=tk.EW, pady=(10, 0))
+        detection_panel.columnconfigure(0, weight=1)
         ttk.Checkbutton(detection_panel, text="顯示偵測框", variable=self.object_detect_preview_var).grid(
-            row=0, column=0, sticky=tk.W, padx=6, pady=(4, 2)
+            row=0, column=0, columnspan=3, sticky=tk.W, padx=6, pady=(4, 2)
         )
-        ttk.Label(detection_panel, text="信心值").grid(row=0, column=1, sticky=tk.W, padx=(8, 2), pady=(4, 2))
-        ttk.Entry(detection_panel, textvariable=self.object_detect_conf_var, width=7).grid(row=0, column=2, sticky=tk.W, pady=(4, 2))
-        ttk.Label(detection_panel, text="偵測模型").grid(row=1, column=0, sticky=tk.W, padx=6, pady=2)
-        ttk.Entry(detection_panel, textvariable=self.object_detect_model_var, width=18).grid(
-            row=1, column=1, columnspan=2, sticky=tk.EW, padx=(8, 4), pady=2
+        ttk.Label(detection_panel, textvariable=self.object_detect_confidence_display_var).grid(
+            row=1, column=0, columnspan=3, sticky=tk.W, padx=6, pady=2
         )
-        ttk.Button(detection_panel, text="選擇模型", command=self._choose_detect_model).grid(row=2, column=0, sticky=tk.W, padx=6, pady=(2, 4))
+        ttk.Label(detection_panel, text="最低辨識門檻（固定）").grid(
+            row=2, column=0, sticky=tk.W, padx=6, pady=2
+        )
+        ttk.Label(detection_panel, textvariable=self.object_detect_conf_var).grid(
+            row=2, column=1, columnspan=2, sticky=tk.W, padx=(8, 4), pady=2
+        )
+        ttk.Button(detection_panel, text="選擇模型", command=self._choose_detect_model).grid(
+            row=3, column=0, sticky=tk.W, padx=6, pady=(4, 4)
+        )
         ttk.Button(detection_panel, text="套用 WBC 模型", command=self._reset_detect_model_to_default).grid(
-            row=2, column=1, columnspan=2, sticky=tk.W, padx=(8, 0), pady=(2, 4)
+            row=3, column=1, columnspan=2, sticky=tk.W, padx=(8, 4), pady=(4, 4)
         )
-        ttk.Label(detection_panel, textvariable=self.object_detect_model_status_var, wraplength=230).grid(
-            row=3, column=0, columnspan=3, sticky=tk.W, padx=6, pady=(0, 4)
+        ttk.Label(detection_panel, textvariable=self.object_detect_model_status_var, wraplength=360).grid(
+            row=4, column=0, columnspan=3, sticky=tk.W, padx=6, pady=(0, 4)
         )
-        ttk.Checkbutton(preview_controls, text="輸出偵測覆蓋圖", variable=self.object_detect_save_var).grid(
-            row=4, column=0, columnspan=3, sticky=tk.W, pady=(6, 0)
+        ttk.Checkbutton(detection_panel, text="輸出偵測覆蓋圖", variable=self.object_detect_save_var).grid(
+            row=5, column=0, columnspan=3, sticky=tk.W, padx=6, pady=(2, 6)
         )
-
-        pylon_panel = ttk.LabelFrame(preview_controls, text="Pylon Viewer PFS")
-        pylon_panel.grid(row=5, column=0, columnspan=3, sticky=tk.EW, pady=(10, 0))
-        self._pylon_profile_status_label = ttk.Label(pylon_panel, textvariable=self.pylon_profile_display_var)
-        self._pylon_profile_entry = ttk.Entry(pylon_panel, textvariable=self.pylon_profile_path_var, width=22)
-        self._pylon_profile_select_button = ttk.Button(pylon_panel, text="選擇 PFS", command=self._choose_pylon_profile)
-        self._pylon_profile_select_button.grid(row=0, column=0, sticky=tk.W, padx=6, pady=(4, 2))
-        ttk.Button(pylon_panel, text="立即套用", command=self._apply_selected_pylon_profile).grid(
-            row=0, column=1, sticky=tk.W, padx=(6, 0), pady=(4, 2)
-        )
-        ttk.Checkbutton(pylon_panel, text="啟動時套用", variable=self.use_pylon_profile_var).grid(
-            row=0, column=2, sticky=tk.W, padx=(6, 0), pady=(4, 2)
-        )
-        ttk.Checkbutton(pylon_panel, text="保留 PFS 原始畫面", variable=self.pylon_profile_raw_frame_var).grid(
-            row=1, column=0, columnspan=2, sticky=tk.W, padx=6, pady=(2, 4)
-        )
-        ttk.Button(pylon_panel, text="停止套用 PFS", command=self._stop_applying_pylon_profile).grid(
-            row=1, column=2, sticky=tk.W, padx=(6, 0), pady=(2, 4)
-        )
-        self._update_pylon_profile_display()
 
         cam_group = ttk.LabelFrame(frame, text="手動拍照與拼接")
         cam_group.pack(fill=tk.X, pady=(0, 10))
@@ -1634,33 +1624,6 @@ class StepperDragGUI:
         self.capture_start_x_var.set(str(x))
         self.capture_start_y_var.set(str(y))
         self._append_log(f"已帶入目前座標作為起點：({x},{y})")
-
-    def _update_pylon_profile_display(self) -> None:
-        profile_path = self.pylon_profile_path_var.get().strip()
-        display = f"已選擇：{Path(profile_path).name}" if profile_path else "未選擇 PFS"
-        self.pylon_profile_display_var.set(display)
-        if not hasattr(self, "_pylon_profile_entry"):
-            return
-        self._pylon_profile_status_label.grid_remove()
-        self._pylon_profile_entry.grid_remove()
-        if profile_path:
-            self._pylon_profile_entry.grid(
-                row=2,
-                column=0,
-                columnspan=3,
-                sticky=tk.EW,
-                padx=6,
-                pady=(0, 4),
-            )
-        else:
-            self._pylon_profile_status_label.grid(
-                row=2,
-                column=0,
-                columnspan=3,
-                sticky=tk.W,
-                padx=6,
-                pady=(0, 4),
-            )
 
     def _update_wbc_output_button(self) -> None:
         if self._wbc_capture_latest_output_dir is not None and self._wbc_capture_latest_output_dir.is_dir():
@@ -2708,19 +2671,154 @@ class StepperDragGUI:
         self.preview_display_status_var.set(message)
         if self._preview_display_frame_widget is not None:
             self._preview_display_frame_widget.configure(
-                width=_EMBEDDED_PREVIEW_PLACEHOLDER_SIZE,
-                height=_EMBEDDED_PREVIEW_PLACEHOLDER_SIZE,
+                width=_EMBEDDED_PREVIEW_MAX_WIDTH,
+                height=_EMBEDDED_PREVIEW_MAX_HEIGHT,
             )
         if self._preview_display_label is None:
             return
         self._preview_display_label.configure(image=self._preview_placeholder_image, text="")
         self._preview_photo_image = None
 
-    def _resize_embedded_preview_area(self, frame: np.ndarray) -> None:
-        if self._preview_display_frame_widget is None:
+    @staticmethod
+    def _render_preview_view(
+        frame: np.ndarray,
+        viewport_width: int,
+        viewport_height: int,
+        zoom: float = 1.0,
+        center: tuple[float, float] = (0.5, 0.5),
+    ) -> np.ndarray:
+        """Render a fit/zoom/pan view without changing the source capture frame."""
+        if frame is None or frame.ndim < 2:
+            raise ValueError("預覽影像無效")
+        source_height, source_width = frame.shape[:2]
+        viewport_width = max(1, int(viewport_width))
+        viewport_height = max(1, int(viewport_height))
+        if source_width <= 0 or source_height <= 0:
+            raise ValueError("預覽影像尺寸無效")
+
+        fit_scale = min(viewport_width / float(source_width), viewport_height / float(source_height))
+        scale = fit_scale * min(_PREVIEW_VIEW_MAX_ZOOM, max(1.0, float(zoom)))
+        visible_width = min(source_width, max(1, int(round(viewport_width / scale))))
+        visible_height = min(source_height, max(1, int(round(viewport_height / scale))))
+        center_x = min(1.0, max(0.0, float(center[0]))) * source_width
+        center_y = min(1.0, max(0.0, float(center[1]))) * source_height
+        left = int(round(center_x - visible_width / 2.0))
+        top = int(round(center_y - visible_height / 2.0))
+        left = min(max(0, left), source_width - visible_width)
+        top = min(max(0, top), source_height - visible_height)
+        cropped = frame[top : top + visible_height, left : left + visible_width]
+
+        rendered_width = max(1, int(round(visible_width * scale)))
+        rendered_height = max(1, int(round(visible_height * scale)))
+        interpolation = cv2.INTER_AREA if scale < 1.0 else cv2.INTER_LINEAR
+        rendered = cv2.resize(cropped, (rendered_width, rendered_height), interpolation=interpolation)
+        canvas = np.zeros((viewport_height, viewport_width, *frame.shape[2:]), dtype=frame.dtype)
+        offset_x = max(0, (viewport_width - rendered_width) // 2)
+        offset_y = max(0, (viewport_height - rendered_height) // 2)
+        copy_width = min(viewport_width - offset_x, rendered_width)
+        copy_height = min(viewport_height - offset_y, rendered_height)
+        canvas[offset_y : offset_y + copy_height, offset_x : offset_x + copy_width] = rendered[:copy_height, :copy_width]
+        return canvas
+
+    def _reset_preview_view(self) -> None:
+        self._preview_view_zoom = 1.0
+        self._preview_view_center = (0.5, 0.5)
+
+    def _open_preview_view(self) -> None:
+        if self._preview_view_window is not None and self._preview_view_window.winfo_exists():
+            self._preview_view_window.deiconify()
+            self._preview_view_window.lift()
             return
-        height, width = frame.shape[:2]
-        self._preview_display_frame_widget.configure(width=max(1, int(width)), height=max(1, int(height)))
+        window = tk.Toplevel(self.root)
+        window.title("MSH Basler 預覽檢視")
+        window.geometry("1280x820")
+        window.minsize(640, 480)
+        window.configure(bg="#071627")
+        window.protocol("WM_DELETE_WINDOW", self._close_preview_view)
+        window.bind("<Escape>", lambda _event: self._set_preview_view_fullscreen(False))
+        controls = ttk.Frame(window)
+        controls.pack(fill=tk.X, padx=8, pady=(8, 4))
+        ttk.Button(controls, text="−", command=lambda: self._change_preview_view_zoom(1 / _PREVIEW_VIEW_ZOOM_STEP)).pack(side=tk.LEFT)
+        ttk.Button(controls, text="+", command=lambda: self._change_preview_view_zoom(_PREVIEW_VIEW_ZOOM_STEP)).pack(side=tk.LEFT, padx=(4, 0))
+        ttk.Button(controls, text="重設為適合視窗", command=self._reset_preview_view).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Button(controls, text="1:1", command=self._set_preview_view_one_to_one).pack(side=tk.LEFT, padx=(4, 0))
+        ttk.Button(controls, text="全螢幕", command=lambda: self._set_preview_view_fullscreen(True)).pack(side=tk.LEFT, padx=(8, 0))
+        ttk.Label(controls, text="滾輪縮放；拖曳平移；Esc 離開全螢幕").pack(side=tk.RIGHT)
+        canvas = tk.Canvas(window, bg="#071627", highlightthickness=0, cursor="fleur")
+        canvas.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
+        canvas.bind("<MouseWheel>", self._on_preview_view_mousewheel)
+        canvas.bind("<Button-4>", lambda _event: self._change_preview_view_zoom(_PREVIEW_VIEW_ZOOM_STEP))
+        canvas.bind("<Button-5>", lambda _event: self._change_preview_view_zoom(1 / _PREVIEW_VIEW_ZOOM_STEP))
+        canvas.bind("<ButtonPress-1>", self._on_preview_view_drag_start)
+        canvas.bind("<B1-Motion>", self._on_preview_view_drag)
+        self._preview_view_window = window
+        self._preview_view_canvas = canvas
+        self._reset_preview_view()
+
+    def _close_preview_view(self) -> None:
+        if self._preview_view_window is not None:
+            self._preview_view_window.destroy()
+        self._preview_view_window = None
+        self._preview_view_canvas = None
+        self._preview_view_photo_image = None
+
+    def _set_preview_view_fullscreen(self, enabled: bool) -> None:
+        if self._preview_view_window is not None and self._preview_view_window.winfo_exists():
+            self._preview_view_window.attributes("-fullscreen", bool(enabled))
+
+    def _change_preview_view_zoom(self, factor: float) -> None:
+        self._preview_view_zoom = min(_PREVIEW_VIEW_MAX_ZOOM, max(1.0, self._preview_view_zoom * factor))
+
+    def _set_preview_view_one_to_one(self) -> None:
+        canvas = self._preview_view_canvas
+        if canvas is None:
+            return
+        with self._preview_display_lock:
+            frame = self._preview_display_frame
+        if frame is None:
+            return
+        width = max(1, int(canvas.winfo_width()))
+        height = max(1, int(canvas.winfo_height()))
+        fit_scale = min(width / float(frame.shape[1]), height / float(frame.shape[0]))
+        self._preview_view_zoom = min(_PREVIEW_VIEW_MAX_ZOOM, max(1.0, 1.0 / fit_scale))
+
+    def _on_preview_view_mousewheel(self, event: tk.Event) -> None:
+        self._change_preview_view_zoom(_PREVIEW_VIEW_ZOOM_STEP if event.delta > 0 else 1 / _PREVIEW_VIEW_ZOOM_STEP)
+
+    def _on_preview_view_drag_start(self, event: tk.Event) -> None:
+        self._preview_view_drag_start = (int(event.x), int(event.y))
+
+    def _on_preview_view_drag(self, event: tk.Event) -> None:
+        start = self._preview_view_drag_start
+        canvas = self._preview_view_canvas
+        if start is None or canvas is None:
+            return
+        with self._preview_display_lock:
+            frame = self._preview_display_frame
+        if frame is None:
+            return
+        width = max(1, int(canvas.winfo_width()))
+        height = max(1, int(canvas.winfo_height()))
+        fit_scale = min(width / float(frame.shape[1]), height / float(frame.shape[0]))
+        scale = fit_scale * self._preview_view_zoom
+        center_x, center_y = self._preview_view_center
+        self._preview_view_center = (
+            min(1.0, max(0.0, center_x - (int(event.x) - start[0]) / (frame.shape[1] * scale))),
+            min(1.0, max(0.0, center_y - (int(event.y) - start[1]) / (frame.shape[0] * scale))),
+        )
+        self._preview_view_drag_start = (int(event.x), int(event.y))
+
+    def _refresh_preview_view_window(self, frame: np.ndarray) -> None:
+        canvas = self._preview_view_canvas
+        if canvas is None or self._preview_view_window is None or not self._preview_view_window.winfo_exists():
+            return
+        width = max(1, int(canvas.winfo_width()))
+        height = max(1, int(canvas.winfo_height()))
+        rendered = self._render_preview_view(frame, width, height, self._preview_view_zoom, self._preview_view_center)
+        photo_image = self._preview_photoimage_from_bgr(rendered)
+        self._preview_view_photo_image = photo_image
+        canvas.delete("preview")
+        canvas.create_image(0, 0, anchor=tk.NW, image=photo_image, tags="preview")
 
     @staticmethod
     def _preview_photoimage_from_bgr(frame: np.ndarray) -> tk.PhotoImage:
@@ -2739,6 +2837,7 @@ class StepperDragGUI:
         with self._preview_display_lock:
             frame = None if self._preview_display_frame is None else self._preview_display_frame.copy()
             message = self._preview_display_message
+        self._update_preview_confidence_display()
         if not self._preview_running:
             self._show_preview_placeholder(message or "預覽已停止")
             return
@@ -2746,11 +2845,16 @@ class StepperDragGUI:
             self._show_preview_placeholder(message or "等待 Basler 訊號…")
         elif self._preview_display_label is not None:
             try:
-                photo_image = self._preview_photoimage_from_bgr(frame)
+                embedded = self._render_preview_view(
+                    frame,
+                    _EMBEDDED_PREVIEW_MAX_WIDTH,
+                    _EMBEDDED_PREVIEW_MAX_HEIGHT,
+                )
+                photo_image = self._preview_photoimage_from_bgr(embedded)
                 self._preview_photo_image = photo_image
-                self._resize_embedded_preview_area(frame)
                 self._preview_display_label.configure(image=photo_image, text="")
                 self.preview_display_status_var.set(message)
+                self._refresh_preview_view_window(frame)
             except Exception as exc:
                 self._show_preview_placeholder(f"預覽顯示失敗：{exc}")
         self._schedule_preview_display()
@@ -2823,22 +2927,6 @@ class StepperDragGUI:
         return False
 
     @staticmethod
-    def _set_pylon_integer_if_available(camera: object, attr_name: str, value: int) -> bool:
-        try:
-            node = getattr(camera, attr_name)
-        except Exception:
-            return False
-        if node is None:
-            return False
-        try:
-            if hasattr(node, "SetValue"):
-                node.SetValue(int(value))
-                return True
-        except Exception:
-            return False
-        return False
-
-    @staticmethod
     def _set_pylon_integer_min_if_available(camera: object, attr_name: str) -> Optional[int]:
         try:
             node = getattr(camera, attr_name)
@@ -2872,30 +2960,6 @@ class StepperDragGUI:
             return value
         except Exception:
             return None
-
-    def _set_first_available_pylon_enum(self, camera: object, names: list[str], value: str) -> Optional[str]:
-        for name in names:
-            if self._set_pylon_enum_if_available(camera, name, value):
-                return name
-        return None
-
-    def _set_first_available_pylon_float(self, camera: object, names: list[str], value: float) -> Optional[str]:
-        for name in names:
-            if self._set_pylon_float_if_available(camera, name, value):
-                return name
-        return None
-
-    def _set_first_available_pylon_bool(self, camera: object, names: list[str], value: bool) -> Optional[str]:
-        for name in names:
-            if self._set_pylon_bool_if_available(camera, name, value):
-                return name
-        return None
-
-    def _set_first_available_pylon_integer(self, camera: object, names: list[str], value: int) -> Optional[str]:
-        for name in names:
-            if self._set_pylon_integer_if_available(camera, name, value):
-                return name
-        return None
 
     def _configure_basler_camera(self, camera: object) -> None:
         # Tune Basler for a smoother preview while keeping automatic exposure/gain enabled.
@@ -2935,266 +2999,32 @@ class StepperDragGUI:
         self._set_pylon_enum_if_available(camera, "GainAuto", "Continuous")
         self._set_pylon_enum_if_available(camera, "BalanceWhiteAuto", "Continuous")
 
-    def _apply_basler_auto_image_settings(self, camera: object) -> list[str]:
-        applied: list[str] = []
-        enum_settings = [
-            (["PixelFormat"], "YCbCr422_8"),
-            ("TriggerSelector", "FrameStart"),
-            ("TriggerMode", "Off"),
-            ("AcquisitionMode", "Continuous"),
-            ("ExposureMode", "Timed"),
-            ("ExposureAuto", "Continuous"),
-            ("GainAuto", "Continuous"),
-            ("BalanceWhiteAuto", "Continuous"),
-            ("LightSourcePreset", "Daylight5000K"),
-            (["ColorSpace"], "sRGB"),
-            (["AutoFunctionProfile"], "MinimizeGain"),
-            (["AutoFunctionROISelector", "AutoFunctionAOISelector"], "ROI1"),
-        ]
-        for names, value in enum_settings:
-            if isinstance(names, str):
-                names = [names]
-            name = self._set_first_available_pylon_enum(camera, names, value)
-            if name is not None:
-                applied.append(f"{name}={value}")
-
-        float_settings = [
-            ("Gamma", 1.0),
-            ("BlackLevel", 0.0),
-            (["AutoTargetBrightness", "AutoTargetValue", "AutoExposureTargetBrightness"], _PYLON_AUTO_TARGET_BRIGHTNESS),
-            (["AutoExposureTimeLowerLimit", "ExposureTimeLowerLimit"], _PYLON_AUTO_EXPOSURE_LOWER_US),
-            (["AutoExposureTimeUpperLimit", "ExposureTimeUpperLimit"], _PYLON_AUTO_EXPOSURE_UPPER_US),
-            (["AutoGainLowerLimit", "GainLowerLimit"], _PYLON_AUTO_GAIN_LOWER_DB),
-            (["AutoGainUpperLimit", "GainUpperLimit"], _PYLON_AUTO_GAIN_UPPER_DB),
-            ("AcquisitionFrameRate", _BASLER_PREVIEW_FPS),
-        ]
-        for names, value in float_settings:
-            if isinstance(names, str):
-                names = [names]
-            name = self._set_first_available_pylon_float(camera, names, value)
-            if name is not None:
-                applied.append(f"{name}={value:g}")
-
-        if self._set_pylon_bool_if_available(camera, "AcquisitionFrameRateEnable", True):
-            applied.append("AcquisitionFrameRateEnable=True")
-
-        integer_settings = [
-            (["AutoFunctionROIWidth", "AutoFunctionAOIWidth"], 3088),
-            (["AutoFunctionROIHeight", "AutoFunctionAOIHeight"], 2064),
-            (["AutoFunctionROIOffsetX", "AutoFunctionAOIOffsetX"], 0),
-            (["AutoFunctionROIOffsetY", "AutoFunctionAOIOffsetY"], 0),
-        ]
-        for names, value in integer_settings:
-            name = self._set_first_available_pylon_integer(camera, names, value)
-            if name is not None:
-                applied.append(f"{name}={value}")
-
-        bool_settings = [
-            (["AutoFunctionROIBrightness", "AutoFunctionAOIBrightness"], True),
-            (["AutoFunctionROIWhiteBalance", "AutoFunctionAOIWhiteBalance"], True),
-        ]
-        for names, value in bool_settings:
-            name = self._set_first_available_pylon_bool(camera, names, value)
-            if name is not None:
-                applied.append(f"{name}={value}")
-
-        return applied
-
-    def _get_active_pylon_camera(self) -> Optional[object]:
-        cap = self._ensure_camera_open()
-        camera = getattr(cap, "_camera", None)
-        return camera
-
-    def _choose_pylon_profile(self) -> None:
-        selected = filedialog.askopenfilename(
-            title="選擇 Basler Pylon Viewer PFS 相機參數",
-            filetypes=[("Basler PFS 參數檔", "*.pfs"), ("所有檔案", "*.*")],
-        )
-        if selected:
-            self.pylon_profile_path_var.set(selected)
-            self._append_log(f"已選擇 Basler PFS 相機參數: {selected}")
-
-    def _current_pylon_profile_path(self) -> Optional[Path]:
-        value = self.pylon_profile_path_var.get().strip()
-        if not value:
-            return None
-        return Path(value).expanduser().resolve()
-
-    def _load_pylon_profile(self, camera: object, *, required: bool = False) -> bool:
-        profile_path = self._current_pylon_profile_path()
-        if profile_path is None:
-            if required:
-                raise RuntimeError("尚未選擇 Basler PFS 相機參數檔。")
-            return False
-        if not profile_path.is_file():
-            if required:
-                raise FileNotFoundError(f"找不到 Basler PFS 相機參數檔: {profile_path}")
-            self._append_log(f"找不到 Basler PFS 相機參數檔，改用內建參數: {profile_path}")
-            return False
-
-        from pypylon import pylon
-
-        pylon.FeaturePersistence.Load(str(profile_path), camera.GetNodeMap(), True)
-        self._pylon_profile_loaded = True
-        self._append_log(f"已載入 Basler PFS 相機參數: {profile_path}")
-        return True
-
-    def _apply_selected_pylon_profile(self) -> None:
-        try:
-            camera = self._get_active_pylon_camera()
-            if camera is None:
-                raise RuntimeError("目前不是 Basler pylon 相機，無法套用 PFS 相機參數。")
-
-            restarted_grabbing = False
-            with self._camera_lock:
-                was_grabbing = False
-                try:
-                    was_grabbing = bool(camera.IsGrabbing())
-                except Exception:
-                    was_grabbing = False
-                if was_grabbing:
-                    camera.StopGrabbing()
-
-                self._load_pylon_profile(camera, required=True)
-
-                if was_grabbing:
-                    from pypylon import pylon
-
-                    camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
-                    restarted_grabbing = True
-
-            if restarted_grabbing:
-                self._append_log("Basler grabbing 已恢復，PFS 畫面會接續更新。")
-        except Exception as exc:
-            self._append_log(f"PFS 相機參數套用失敗: {exc}")
-            messagebox.showerror("PFS 套用失敗", str(exc))
-
-    def _stop_applying_pylon_profile(self) -> None:
-        self.use_pylon_profile_var.set(False)
-        self.pylon_profile_raw_frame_var.set(False)
-        self._pylon_profile_loaded = False
-
-        cap = self.cap
-        if cap is None:
-            self._append_log("已停止套用 PFS：啟動時套用已關閉；目前相機尚未開啟。")
-            return
-
-        camera = getattr(cap, "_camera", None)
-        if camera is None:
-            self._append_log("已停止套用 PFS：啟動時套用已關閉；目前不是 Basler pylon 相機。")
-            return
-
-        restarted_grabbing = False
-        try:
-            with self._camera_lock:
-                was_grabbing = False
-                try:
-                    was_grabbing = bool(camera.IsGrabbing())
-                except Exception:
-                    was_grabbing = False
-                if was_grabbing:
-                    try:
-                        camera.StopGrabbing()
-                    except Exception:
-                        pass
-
-                self._configure_basler_camera(camera)
-                applied = self._apply_basler_auto_image_settings(camera)
-
-                if was_grabbing:
-                    from pypylon import pylon
-
-                    camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
-                    restarted_grabbing = True
-
-            if applied:
-                self._append_log("已停止套用 PFS，並切回 Basler 內建自動畫質: " + ", ".join(applied))
-            else:
-                self._append_log("已停止套用 PFS，並切回 Basler 內建相機設定。")
-            if restarted_grabbing:
-                self._append_log("Basler grabbing 已恢復，預覽會接續更新。")
-        except Exception as exc:
-            self._append_log(f"停止套用 PFS 失敗: {exc}")
-            messagebox.showerror("停止套用 PFS 失敗", str(exc))
-
-    def _apply_automatic_image_adjustment(self) -> None:
-        try:
-            camera = self._get_active_pylon_camera()
-            if camera is None:
-                raise RuntimeError("目前不是 Basler pylon 相機，無法套用 pylon 自動畫質參數。")
-
-            restarted_grabbing = False
-            with self._camera_lock:
-                was_grabbing = False
-                try:
-                    was_grabbing = bool(camera.IsGrabbing())
-                except Exception:
-                    was_grabbing = False
-                if was_grabbing:
-                    try:
-                        camera.StopGrabbing()
-                    except Exception:
-                        pass
-
-                applied = self._apply_basler_auto_image_settings(camera)
-                self._pylon_profile_loaded = False
-
-                if was_grabbing:
-                    from pypylon import pylon
-
-                    camera.StartGrabbing(pylon.GrabStrategy_LatestImageOnly)
-                    restarted_grabbing = True
-
-            if applied:
-                self._append_log("已套用 Basler 自動畫質參數: " + ", ".join(applied))
-            else:
-                self._append_log("未找到可套用的 Basler 自動畫質節點。")
-            if restarted_grabbing:
-                self._append_log("Basler grabbing 已恢復，預覽會接續更新。")
-        except Exception as exc:
-            self._append_log(f"自動畫質套用失敗: {exc}")
-            messagebox.showerror("自動畫質失敗", str(exc))
+    def _styled_camera_frame(self, frame: np.ndarray) -> np.ndarray:
+        return np.ascontiguousarray(frame.copy())
 
     @staticmethod
-    def _reference_preview(frame: np.ndarray) -> np.ndarray:
-        work = frame.astype(np.float32) / 255.0
-
-        # Use upper-mid tones for white balance so purple WBC regions do not skew the whole frame.
-        upper_mid = np.percentile(work.reshape(-1, 3), 75, axis=0)
-        gray = float(upper_mid.mean())
-        scales = np.where(upper_mid > 1e-6, gray / upper_mid, 1.0)
-        work *= scales.reshape(1, 1, 3)
-        work *= np.array([0.96, 1.02, 1.05], dtype=np.float32).reshape(1, 1, 3)
-        work = np.clip(work, 0.0, 1.0)
-
-        # Stretch the smear into the bright, high-contrast pylon-viewer look.
-        p1 = float(np.percentile(work, 1.0))
-        p998 = float(np.percentile(work, 99.8))
-        if p998 > p1:
-            work = (work - p1) / (p998 - p1)
-        work = np.clip(work, 0.0, 1.0)
-        work = (work - 0.5) * 1.22 + 0.5
-        work = np.clip(work, 0.0, 1.0)
-
-        work = np.power(work, 0.66)
-        image = (work * 255).astype(np.uint8)
-        lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
-        l_channel, a_channel, b_channel = cv2.split(lab)
-        l_channel = cv2.createCLAHE(clipLimit=1.35, tileGridSize=(8, 8)).apply(l_channel)
-        image = cv2.cvtColor(cv2.merge([l_channel, a_channel, b_channel]), cv2.COLOR_LAB2BGR)
-
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV).astype(np.float32)
-        hsv[:, :, 1] *= 1.38
-        hsv[:, :, 2] *= 1.13
-        hsv[:, :, 1:] = np.clip(hsv[:, :, 1:], 0, 255)
-        image = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
-        blur = cv2.GaussianBlur(image, (0, 0), 1.0)
-        return cv2.addWeighted(image, 1.32, blur, -0.32, 0)
-
-    def _styled_camera_frame(self, frame: np.ndarray) -> np.ndarray:
-        if self._pylon_profile_loaded and bool(self.pylon_profile_raw_frame_var.get()):
-            return np.ascontiguousarray(frame.copy())
-        return self._reference_preview(frame)
+    def _draw_preview_status_overlay(
+        frame: np.ndarray,
+        lines: list[tuple[str, tuple[int, int, int]]],
+    ) -> None:
+        for index, (text, color) in enumerate(lines, start=1):
+            origin = (_PREVIEW_OVERLAY_MARGIN, index * _PREVIEW_OVERLAY_LINE_HEIGHT)
+            put_text(
+                frame,
+                text,
+                origin,
+                _PREVIEW_OVERLAY_FONT_SCALE,
+                (0, 0, 0),
+                _PREVIEW_OVERLAY_TEXT_THICKNESS + 4,
+            )
+            put_text(
+                frame,
+                text,
+                origin,
+                _PREVIEW_OVERLAY_FONT_SCALE,
+                color,
+                _PREVIEW_OVERLAY_TEXT_THICKNESS,
+            )
 
     def _get_detect_conf(self) -> float:
         try:
@@ -3372,6 +3202,27 @@ class StepperDragGUI:
             return list(self._preview_detections)
 
     @staticmethod
+    def _format_preview_confidence(detections: list) -> str:
+        confidence_values = [
+            max(0.0, min(1.0, float(getattr(detection, "conf", 0.0))))
+            for detection in detections
+        ]
+        if not confidence_values:
+            return "目前偵測信心值：尚無結果"
+        if len(confidence_values) == 1:
+            return f"目前偵測信心值：{confidence_values[0]:.2f}"
+        return f"目前偵測信心值：最高 {max(confidence_values):.2f}（{len(confidence_values)} 個目標）"
+
+    def _update_preview_confidence_display(self) -> None:
+        if not self._preview_running:
+            text = "目前偵測信心值：預覽未啟動"
+        elif not bool(self.object_detect_preview_var.get()):
+            text = "目前偵測信心值：辨識已關閉"
+        else:
+            text = self._format_preview_confidence(self._latest_preview_detections())
+        self.object_detect_confidence_display_var.set(text)
+
+    @staticmethod
     def _scale_preview_detections(
         detections: list,
         source_shape: tuple[int, ...],
@@ -3529,15 +3380,7 @@ class StepperDragGUI:
 
             pylon_camera = pylon.InstantCamera(tl_factory.CreateDevice(selected))
             pylon_camera.Open()
-            self._pylon_profile_loaded = False
-            profile_loaded = False
-            if bool(self.use_pylon_profile_var.get()):
-                try:
-                    profile_loaded = self._load_pylon_profile(pylon_camera)
-                except Exception as exc:
-                    self._append_log(f"Basler PFS 載入失敗，改用內建參數: {exc}")
-            if not profile_loaded:
-                self._configure_basler_camera(pylon_camera)
+            self._configure_basler_camera(pylon_camera)
             converter = pylon.ImageFormatConverter()
             converter.OutputPixelFormat = pylon.PixelType_BGR8packed
             converter.OutputBitAlignment = pylon.OutputBitAlignment_MsbAligned
@@ -3637,12 +3480,7 @@ class StepperDragGUI:
                 # a compact copy, so the UI does not silently alter camera color,
                 # contrast, sharpness, or source resolution before rendering.
                 preview_source = self._prepare_preview_frame(frame)
-                preview = np.ascontiguousarray(frame.copy())
-                display_preview = self._resize_for_display_keep_aspect(
-                    preview,
-                    _EMBEDDED_PREVIEW_MAX_WIDTH,
-                    _EMBEDDED_PREVIEW_MAX_HEIGHT,
-                )
+                display_preview = np.ascontiguousarray(frame.copy())
                 if bool(self.object_detect_preview_var.get()):
                     model_path = self._resolve_detect_model_for_gui()
                     status_text, status_color = self._describe_detect_model_status(model_path)
@@ -3653,43 +3491,36 @@ class StepperDragGUI:
                         display_preview.shape,
                     )
                     if detections and annotate_detections is not None:
-                        display_preview = annotate_detections(display_preview, detections)
-                    put_text(
-                        display_preview,
-                        f"detections: {len(detections)}",
-                        (10, 80),
-                        0.7,
-                        (255, 220, 0),
-                        2,
-                    )
-                    put_text(
-                        display_preview,
-                        f"model: {Path(model_path).name}",
-                        (10, 108),
-                        0.6,
-                        (255, 255, 255),
-                        2,
-                    )
-                    put_text(
-                        display_preview,
-                        status_text,
-                        (10, 136),
-                        0.6,
-                        status_color,
-                        2,
-                    )
+                        display_preview = annotate_detections(
+                            display_preview,
+                            detections,
+                            font_scale=_PREVIEW_OVERLAY_FONT_SCALE,
+                            box_thickness=_PREVIEW_OVERLAY_BOX_THICKNESS,
+                            text_thickness=_PREVIEW_OVERLAY_TEXT_THICKNESS,
+                        )
+                    detection_lines = [
+                        (f"detections: {len(detections)}", (255, 220, 0)),
+                        (f"model: {Path(model_path).name}", (255, 255, 255)),
+                        (status_text, status_color),
+                    ]
                 else:
+                    detection_lines = []
                     with self._preview_detection_lock:
                         self._preview_detections = []
-                put_text(display_preview, "Live preview", (10, 24), 0.7, (0, 255, 0), 2)
-                put_text(display_preview, f"coord: {x},{y}", (10, 52), 0.7, (0, 220, 255), 2)
+                self._draw_preview_status_overlay(
+                    display_preview,
+                    [
+                        ("Live preview", (0, 255, 0)),
+                        (f"coord: {x},{y}", (0, 220, 255)),
+                        *detection_lines,
+                    ],
+                )
                 self._publish_preview_display_frame(
                     display_preview,
                     f"Basler 原始畫面：{frame.shape[1]}×{frame.shape[0]} | 顯示：{display_preview.shape[1]}×{display_preview.shape[0]}",
                 )
                 shape_info = (
                     (int(frame.shape[1]), int(frame.shape[0])),
-                    (int(preview.shape[1]), int(preview.shape[0])),
                     (int(display_preview.shape[1]), int(display_preview.shape[0])),
                 )
                 if shape_info != last_shape_info:
@@ -3697,8 +3528,7 @@ class StepperDragGUI:
                     self._append_log(
                         "預覽尺寸: "
                         f"raw={shape_info[0][0]}x{shape_info[0][1]}, "
-                        f"preview={shape_info[1][0]}x{shape_info[1][1]}, "
-                        f"display={shape_info[2][0]}x{shape_info[2][1]}"
+                        f"display-buffer={shape_info[1][0]}x{shape_info[1][1]}"
                     )
             except Exception as exc:
                 self._append_log(f"預覽錯誤: {exc}")

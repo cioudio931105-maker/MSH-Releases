@@ -84,7 +84,8 @@ try {
     $gitDirtyPaths = @(& git -C $projectRoot status --porcelain)
     if ($LASTEXITCODE -ne 0) { throw "無法讀取 Git 工作樹狀態；拒絕建立無法追溯的發行包。" }
     $releaseTag = "v$version"
-    $tagCommit = (& git -C $projectRoot rev-list -n 1 $releaseTag 2>$null).Trim().ToLowerInvariant()
+    $tagCommitOutput = & git -C $projectRoot rev-list -n 1 $releaseTag 2>$null
+    $tagCommit = if ($null -eq $tagCommitOutput) { "" } else { ([string]$tagCommitOutput).Trim().ToLowerInvariant() }
     if (-not $Candidate) {
         if ($gitDirtyPaths.Count -gt 0) { throw "正式發行禁止使用含未提交變更的工作樹。請先 commit，或明確使用 -Candidate。" }
         if ($tagCommit -ne $gitCommit) { throw "正式發行要求 HEAD 有對應 tag $releaseTag。請先建立並審核 tag，或使用 -Candidate。" }

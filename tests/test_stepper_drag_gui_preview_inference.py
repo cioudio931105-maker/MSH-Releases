@@ -91,6 +91,76 @@ class PreviewInferenceTests(unittest.TestCase):
         self.assertEqual((scaled[0].x1, scaled[0].y1, scaled[0].x2, scaled[0].y2), (15, 25, 75, 125))
         self.assertEqual((detection.x1, detection.y1, detection.x2, detection.y2), (12, 20, 60, 100))
 
+    def test_preview_confidence_is_formatted_as_read_only_detection_output(self) -> None:
+        detections = [
+            _PreviewDetection(0, 0, 10, 10, 0.73, 0, "WBC"),
+            _PreviewDetection(20, 20, 30, 30, 0.91, 0, "WBC"),
+        ]
+
+        self.assertEqual(
+            GUI_MODULE.StepperDragGUI._format_preview_confidence(detections),
+            "目前偵測信心值：最高 0.91（2 個目標）",
+        )
+        self.assertEqual(
+            GUI_MODULE.StepperDragGUI._format_preview_confidence([]),
+            "目前偵測信心值：尚無結果",
+        )
+
+    def test_preview_view_fit_preserves_aspect_ratio_with_letterboxing(self) -> None:
+        frame = np.full((100, 200, 3), 37, dtype=np.uint8)
+
+        rendered = GUI_MODULE.StepperDragGUI._render_preview_view(frame, 100, 100)
+
+        self.assertEqual(rendered.shape, (100, 100, 3))
+        self.assertTrue(np.all(rendered[:25] == 0))
+        self.assertTrue(np.all(rendered[25:75] == 37))
+        self.assertTrue(np.all(rendered[75:] == 0))
+
+    def test_embedded_preview_is_large_and_preserves_basler_aspect_ratio(self) -> None:
+        self.assertGreaterEqual(GUI_MODULE._EMBEDDED_PREVIEW_MAX_WIDTH, 480)
+        self.assertGreaterEqual(GUI_MODULE._EMBEDDED_PREVIEW_MAX_HEIGHT, 320)
+        self.assertEqual(
+            GUI_MODULE._EMBEDDED_PREVIEW_MAX_WIDTH * 2,
+            GUI_MODULE._EMBEDDED_PREVIEW_MAX_HEIGHT * 3,
+        )
+
+    def test_preview_overlay_uses_large_outlined_text_for_both_views(self) -> None:
+        calls: list[tuple] = []
+        original_put_text = GUI_MODULE.put_text
+        GUI_MODULE.put_text = lambda *args: calls.append(args)
+        try:
+            GUI_MODULE.StepperDragGUI._draw_preview_status_overlay(
+                np.zeros((2064, 3088, 3), dtype=np.uint8),
+                [("Live preview", (0, 255, 0)), ("coord: 0,0", (0, 220, 255))],
+            )
+        finally:
+            GUI_MODULE.put_text = original_put_text
+
+        self.assertGreaterEqual(GUI_MODULE._PREVIEW_OVERLAY_FONT_SCALE, 2.5)
+        self.assertGreaterEqual(GUI_MODULE._PREVIEW_OVERLAY_TEXT_THICKNESS, 6)
+        self.assertEqual(len(calls), 4)
+        self.assertEqual(calls[0][2], (GUI_MODULE._PREVIEW_OVERLAY_MARGIN, GUI_MODULE._PREVIEW_OVERLAY_LINE_HEIGHT))
+        self.assertEqual(calls[0][4], (0, 0, 0))
+        self.assertEqual(calls[1][4], (0, 255, 0))
+
+    def test_preview_view_zoom_and_pan_select_source_region_without_mutating_frame(self) -> None:
+        frame = np.zeros((100, 200, 3), dtype=np.uint8)
+        frame[:, :100] = 20
+        frame[:, 100:] = 200
+        original = frame.copy()
+
+        rendered = GUI_MODULE.StepperDragGUI._render_preview_view(
+            frame,
+            100,
+            100,
+            zoom=2.0,
+            center=(0.75, 0.5),
+        )
+
+        self.assertEqual(rendered.shape, (100, 100, 3))
+        self.assertGreater(float(rendered.mean()), 150.0)
+        self.assertTrue(np.array_equal(frame, original))
+
 
 class MotorConnectionUiTests(unittest.TestCase):
     class _Value:
@@ -174,33 +244,14 @@ class MotorConnectionUiTests(unittest.TestCase):
         self.assertEqual(capture_entry.packs[-1]["padx"], (4, 4))
         self.assertEqual(capture_button.packs[-1]["side"], GUI_MODULE.tk.LEFT)
 
-    def test_pylon_profile_display_uses_filename_without_editable_path_field(self) -> None:
+    def test_styled_camera_frame_preserves_raw_camera_input(self) -> None:
         gui = self._gui_without_tk()
-        gui.pylon_profile_path_var = self._Value("C:/profiles/basler_400x.pfs")
-        gui.pylon_profile_display_var = self._Value()
+        frame = np.array([[[1, 2, 3], [253, 254, 255]]], dtype=np.uint8)
 
-        gui._update_pylon_profile_display()
+        styled = gui._styled_camera_frame(frame)
 
-        self.assertEqual(gui.pylon_profile_display_var.get(), "已選擇：basler_400x.pfs")
-
-    def test_pylon_path_entry_appears_only_after_a_profile_is_selected(self) -> None:
-        gui = self._gui_without_tk()
-        gui.pylon_profile_path_var = self._Value()
-        gui.pylon_profile_display_var = self._Value()
-        gui._pylon_profile_status_label = self._Widget()
-        gui._pylon_profile_entry = self._Widget()
-        gui._pylon_profile_select_button = self._Widget()
-
-        gui._update_pylon_profile_display()
-        self.assertFalse(gui._pylon_profile_status_label.removed)
-        self.assertTrue(gui._pylon_profile_entry.removed)
-
-        gui.pylon_profile_path_var.set("C:/profiles/basler_400x.pfs")
-        gui._update_pylon_profile_display()
-        self.assertTrue(gui._pylon_profile_status_label.removed)
-        self.assertFalse(gui._pylon_profile_entry.removed)
-        self.assertEqual(gui._pylon_profile_entry.grids[-1]["row"], 2)
-        self.assertEqual(gui._pylon_profile_entry.grids[-1]["columnspan"], 3)
+        np.testing.assert_array_equal(styled, frame)
+        self.assertFalse(np.shares_memory(styled, frame))
 
     def test_wbc_output_button_uses_reserved_slot_until_output_exists(self) -> None:
         gui = self._gui_without_tk()
