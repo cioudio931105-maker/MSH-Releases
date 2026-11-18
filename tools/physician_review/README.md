@@ -17,6 +17,19 @@
 7. 依使用者回饋，檢閱狀態與備註不再顯示。舊 JSON 的 reviewStatus／notes 仍保留、驗證並匯出，不會因介面精簡而刪除。
 8. 下載 CSV 交付結果，另存 JSON 備份；將 CSV 與未修改的原始圖片一起交付。
 
+## YOLO 偵測資料匯出（2026-10-21）
+
+按「匯出 YOLO」可下載單一 ZIP，包含原圖 bytes 的副本、每張圖對應的 YOLO `.txt`、`data.yaml`、`classes.txt`、`class_mapping.json`、來源／切分清單與原格式 JSON 備份。整個 ZIP 解壓縮後，訓練程式指定其 `data.yaml`；工具本身不執行訓練。
+
+- **必須有物件框。** 只有整張影像分類不足以訓練定位；無框影像會略過，不自動產生整圖框或負樣本。請框出圖中所有要學習的目標，並核對分類。
+- **保留全部61類。** ID固定按既有字典順序為0至60；例如G01=0、G05=4、R18=30、P04=35。每次匯出均保留同一對照，不因只選了某些類別而重新編號，也不合併成WBC單類。這是新的61類訓練設定，與既有WBC單類權重的類別定義不同。
+- 每個框一行`class_id x_center y_center width height`，中心、寬、高以原圖尺寸正規化為0至1。使用物件本身的類別，不以整張影像分類覆蓋物件分類。[格式依據：Ultralytics官方偵測資料說明](https://docs.ultralytics.com/datasets/detect/)
+- 為本次操作示範，以原圖SHA-256分組做約80/20切分，至少需要兩張內容不同且有框的圖片；四張不同且有框的圖會分成3張train、1張val。完全相同原圖保留在同一split；相同圖若標註不同則拒絕匯出，要求先核對。**這不提供病人／玻片層級獨立性，也沒有test set**；正式研究需另外依適當群組切分。匯出前顯示實際張數供確認。
+- 匯出影像採唯一編號，避免不同子資料夾同名、或同stem不同副檔名的label互相覆蓋；原始名稱／相對路徑與hash在`export_manifest.json`對照。原圖不改名、不覆寫、不重編碼。
+- 匯出不代表醫師簽核。影像與框原有的檢閱狀態保留在清單／JSON；少量示意資料無法證明61類的模型效能。新ZIP沒有patient/slide資訊時，不會猜測該資訊。
+- 完全離線，ZIP不壓縮、不加入依賴；單次打包上限512MiB，超過時請拆批。圖片、標註及產生的ZIP均為使用者本機資料，不加入Git。
+- 仍可使用CSV與JSON備份／還原；匯出後圖片改為編號，若要用`annotations.json`還原工具進度，請選回原始圖片資料夾。
+
 快捷鍵：`S` / `→` 下一張、`←` 上一張、`Ctrl+Z` 復原、`Enter` 儲存。
 `1–8` 改為目前類別的前八個形態分類並儲存；新字典不能沿用舊快捷鍵的臨床類別語意。
 快捷鍵說明收在可展開的「快捷鍵」中。`M` / `N`、`U` 保留舊檢閱標記相容行為，不猜測 morphology；一般分類不需要此步驟。
@@ -74,7 +87,7 @@ object_review_status,object_annotation_timestamp,legacy_classification,load_erro
 影像與物件分類不共用欄位。無框列的 annotation_id、object_* 與 bbox 為空。
 
 未來 dataset builder 應先以 relativePath 匹配原圖並驗證 SHA-256，再處理唯一 filename fallback。
-歧義、hash mismatch、缺圖、未分類圖片需明確拒絕或送複核。本次未新增 dataset builder 或訓練 pipeline。
+歧義、hash mismatch、缺圖、未分類圖片需明確拒絕或送複核。YOLO匯出會驗證有框圖片的身分、框與類別；未實作臨床研究資料集建置或模型訓練pipeline。
 
 ## 驗證
 
