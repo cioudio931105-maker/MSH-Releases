@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import atexit
 import logging
 import os
 import runpy
@@ -15,6 +16,7 @@ import tkinter as tk
 from tkinter import messagebox
 
 from msh_runtime import (
+    SingleInstanceLock,
     application_root,
     configure_logging,
     configure_runtime_environment,
@@ -27,6 +29,7 @@ from msh_update import UpdateCheckError, UpdateManifest, check_for_update
 PROJECT_ROOT = application_root()
 GUI_SCRIPT = PROJECT_ROOT / "stitched_output" / "stitched_output" / "stitched_output" / "hardware" / "stepper_drag_gui.py"
 SPLASH_IMAGE = PROJECT_ROOT / "assets" / "msh-cyberpunk-splash-640.png"
+SOURCE_STARTUP_LOG = PROJECT_ROOT / "logs" / "hardware_gui_startup.log"
 
 
 def _format_update_message(manifest: UpdateManifest) -> str:
@@ -143,11 +146,28 @@ def _build_splash() -> tuple[tk.Tk, tk.Canvas]:
     return root, canvas
 
 
+def _show_already_running() -> None:
+    notice_root = tk.Tk()
+    notice_root.withdraw()
+    try:
+        messagebox.showinfo("MSH", "MSH 已在執行。", parent=notice_root)
+    finally:
+        notice_root.destroy()
+
+
 def main() -> None:
-    log_path = configure_logging()
+    startup_log_path = None if getattr(sys, "frozen", False) else SOURCE_STARTUP_LOG
+    diagnostics = "--diagnostics" in sys.argv[1:]
+    log_path = configure_logging(startup_log_path=startup_log_path, console=diagnostics)
     configure_runtime_environment()
     sys.excepthook = log_unhandled_exception
     threading.excepthook = lambda args: log_unhandled_exception(args.exc_type, args.exc_value, args.exc_traceback)
+    instance_lock = SingleInstanceLock()
+    if not instance_lock.acquire():
+        logging.getLogger("msh.launcher").info("MSH launch skipped because another instance is running")
+        _show_already_running()
+        return
+    atexit.register(instance_lock.close)
     if getattr(sys, "frozen", False):
         os.chdir(default_output_dir("runtime"))
     logging.getLogger("msh.launcher").info("Starting MSH %s", __version__)
@@ -199,6 +219,7 @@ def main() -> None:
 
     root.after(0, animate)
     root.mainloop()
+    instance_lock.close()
 
 
 if __name__ == "__main__":

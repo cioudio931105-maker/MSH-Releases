@@ -8,6 +8,7 @@ $ErrorActionPreference = "Stop"
 
 $projectRoot = [System.IO.Path]::GetFullPath($PSScriptRoot)
 $guiScript = Join-Path $projectRoot "stitched_output\stitched_output\stitched_output\hardware\stepper_drag_gui.py"
+$launcher = Join-Path $projectRoot "launch_msh.pyw"
 $logDirectory = Join-Path $projectRoot "logs"
 $logPath = Join-Path $logDirectory "hardware_gui_startup.log"
 
@@ -77,6 +78,9 @@ try {
     if (-not (Test-Path -LiteralPath $guiScript -PathType Leaf)) {
         throw "找不到 GUI 主程式：$guiScript"
     }
+    if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
+        throw "找不到 MSH 啟動器：$launcher"
+    }
 
     $runtime = Find-PythonRuntime
     if ($null -eq $runtime) {
@@ -99,66 +103,52 @@ try {
         Write-Host "Python: $($runtime.Python)"
         Push-Location -LiteralPath $projectRoot
         try {
-            & $runtime.Python $guiScript
+            & $runtime.Python $launcher --diagnostics
             exit $LASTEXITCODE
         } finally {
             Pop-Location
         }
     }
 
-    $createdNew = $false
-    $mutex = New-Object System.Threading.Mutex($true, "Local\MSH_Hardware_GUI_Launcher", [ref]$createdNew)
-    if (-not $createdNew) {
-        Show-LauncherMessage -Message "MSH 已在執行。" -Kind Information
-        exit 0
+    New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
+    $startedAt = Get-Date
+    @(
+        "[$($startedAt.ToString('yyyy-MM-dd HH:mm:ss'))] Starting MSH hardware GUI",
+        "Project root: $projectRoot",
+        "Python environment: $($runtime.Name)",
+        "Python: $($runtime.WindowedPython)"
+    ) | Set-Content -LiteralPath $logPath -Encoding UTF8
+
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $runtime.WindowedPython
+    $startInfo.Arguments = '"' + $launcher.Replace('"', '\"') + '"'
+    $startInfo.WorkingDirectory = $projectRoot
+    $startInfo.UseShellExecute = $false
+    $startInfo.CreateNoWindow = $true
+    $startInfo.RedirectStandardOutput = $true
+    $startInfo.RedirectStandardError = $true
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
+    [void]$process.Start()
+    $stdoutTask = $process.StandardOutput.ReadToEndAsync()
+    $stderrTask = $process.StandardError.ReadToEndAsync()
+    $process.WaitForExit()
+    $stdout = $stdoutTask.Result
+    $stderr = $stderrTask.Result
+
+    if (-not [string]::IsNullOrWhiteSpace($stdout)) {
+        "`n--- stdout ---`n$stdout" | Add-Content -LiteralPath $logPath -Encoding UTF8
     }
+    if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+        "`n--- stderr ---`n$stderr" | Add-Content -LiteralPath $logPath -Encoding UTF8
+    }
+    "[$((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))] Exit code: $($process.ExitCode)" |
+        Add-Content -LiteralPath $logPath -Encoding UTF8
 
-    try {
-        New-Item -ItemType Directory -Path $logDirectory -Force | Out-Null
-        $startedAt = Get-Date
-        @(
-            "[$($startedAt.ToString('yyyy-MM-dd HH:mm:ss'))] Starting MSH hardware GUI",
-            "Project root: $projectRoot",
-            "Python environment: $($runtime.Name)",
-            "Python: $($runtime.WindowedPython)"
-        ) | Set-Content -LiteralPath $logPath -Encoding UTF8
-
-        $startInfo = New-Object System.Diagnostics.ProcessStartInfo
-        $startInfo.FileName = $runtime.WindowedPython
-        $startInfo.Arguments = '"' + $guiScript.Replace('"', '\"') + '"'
-        $startInfo.WorkingDirectory = $projectRoot
-        $startInfo.UseShellExecute = $false
-        $startInfo.CreateNoWindow = $true
-        $startInfo.RedirectStandardOutput = $true
-        $startInfo.RedirectStandardError = $true
-
-        $process = New-Object System.Diagnostics.Process
-        $process.StartInfo = $startInfo
-        [void]$process.Start()
-        $stdoutTask = $process.StandardOutput.ReadToEndAsync()
-        $stderrTask = $process.StandardError.ReadToEndAsync()
-        $process.WaitForExit()
-        $stdout = $stdoutTask.Result
-        $stderr = $stderrTask.Result
-
-        if (-not [string]::IsNullOrWhiteSpace($stdout)) {
-            "`n--- stdout ---`n$stdout" | Add-Content -LiteralPath $logPath -Encoding UTF8
-        }
-        if (-not [string]::IsNullOrWhiteSpace($stderr)) {
-            "`n--- stderr ---`n$stderr" | Add-Content -LiteralPath $logPath -Encoding UTF8
-        }
-        "[$((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))] Exit code: $($process.ExitCode)" |
-            Add-Content -LiteralPath $logPath -Encoding UTF8
-
-        if ($process.ExitCode -ne 0) {
-            Show-LauncherMessage -Kind Error -Message "GUI 無法正常啟動。`n`n請執行 run_hardware_gui.bat 進入診斷模式。`n日誌：$logPath"
-            exit $process.ExitCode
-        }
-    } finally {
-        if ($null -ne $mutex) {
-            $mutex.ReleaseMutex()
-            $mutex.Dispose()
-        }
+    if ($process.ExitCode -ne 0) {
+        Show-LauncherMessage -Kind Error -Message "GUI 無法正常啟動。`n`n請執行 run_hardware_gui.bat 進入診斷模式。`n日誌：$logPath"
+        exit $process.ExitCode
     }
 } catch {
     $message = $_.Exception.Message

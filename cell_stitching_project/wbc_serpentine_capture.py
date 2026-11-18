@@ -13,6 +13,7 @@ from typing import Any, Iterable
 
 import cv2
 import numpy as np
+from msh_motion_policy import FIXED_STEP_DELAY_MS
 
 
 SIMULATION_MODE = False
@@ -63,7 +64,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "hardware_x_port": "",
     "hardware_y_port": "",
     "hardware_baud": 115200,
-    "step_move_speed_ms": 8,
+    "step_move_speed_ms": FIXED_STEP_DELAY_MS,
     "detection_settle_seconds": 0.5,
     "detection_frame_attempts": 8,
     "detection_frame_interval_seconds": 0.25,
@@ -181,9 +182,8 @@ class HardwareStage:
         self.y_stepper = ArduinoStepper(port=y_port, baud=baud)
         self.x_stepper.connect()
         self.y_stepper.connect()
-        speed_ms = int(DEFAULT_CONFIG["step_move_speed_ms"])
-        self.x_stepper.set_speed_ms(speed_ms)
-        self.y_stepper.set_speed_ms(speed_ms)
+        self.x_stepper.set_fixed_speed()
+        self.y_stepper.set_fixed_speed()
 
     def move_to(self, x: int, y: int) -> None:
         target_x = int(x)

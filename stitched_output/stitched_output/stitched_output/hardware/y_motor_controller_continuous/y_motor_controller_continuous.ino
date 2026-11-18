@@ -10,14 +10,17 @@
 // Protocol (newline terminated):
 //   PING
 //   MOVE <steps>         ; relative (can be negative)
-//   SPEED_MS <ms>        ; 1..250 (ms per half-step)
-//   SPEED_RPM <rpm>      ; 0.01..15 output-shaft RPM
+//   SPEED_MS 732         ; compatibility alias for fixed 0.02 RPM
+//   SPEED_RPM 0.020      ; only 0.02 output-shaft RPM is accepted
+//   MOTION_POLICY       ; read-only fixed-speed/preload contract
+//   FIRMWARE_ID         ; read-only version, assigned board label and topology
 //   RUN CW [rpm]         ; continuous clockwise rotation
 //   RUN CCW [rpm]        ; continuous counter-clockwise rotation
-//   RELEASE              ; stop and de-energize coils
+//   STOP                 ; stop and keep the current phase energized
+//   RELEASE              ; stop and de-energize all coils
 //   DIR <-1|1>           ; set direction sign
-//   WARMUP [steps] [cycles] ; small forward/backward preload, default 80 steps x 3 cycles
-//   AUTOWARM <0|1>       ; auto warmup before the first MOVE after boot/STOP
+//   WARMUP [steps] [cycles] ; isolated: ERR PRELOAD_DISABLED, no movement
+//   AUTOWARM <0|1>       ; only 0 allowed; automatic preload is isolated
 //   WARMUP_STEPS <steps> ; set default warmup step count, 1..80
 //   WARMUP_CYCLES <n>    ; set default warmup cycle count, 0..10
 //   HOLD <0|1>           ; keep coils energized after MOVE
@@ -25,7 +28,6 @@
 //   PAUSE                ; pause the current MOVE without losing remaining steps
 //   RESUME               ; continue a paused MOVE
 //   STATUS               ; report IDLE/RUNNING/PAUSED and step progress
-//   STOP                 ; release motor
 //
 // Replies:
 //   READY Y-motor
@@ -38,18 +40,17 @@
 
 const char kMotorName[] = "Y-motor";
 const uint8_t kMotorPins[4] = {4, 5, 6, 7};
-const uint8_t kDefaultStepDelayMs = 5;
-const uint8_t kMinStepDelayMs = 1;
-const uint8_t kMaxStepDelayMs = 250;
-const unsigned long kMaxContinuousStepDelayMs = 6000UL;
+constexpr float kFixedMotorRpm = 0.02F;
+constexpr long kHalfStepsPerOutputRev = 4096L;
+constexpr unsigned long kFixedStepIntervalUs =
+    (unsigned long)(60000000.0F / (kFixedMotorRpm * (float)kHalfStepsPerOutputRev) + 0.5F);
+static_assert(kFixedStepIntervalUs == 732422UL, "Unexpected fixed motion interval");
+const unsigned long kDefaultStepDelayMs = (kFixedStepIntervalUs + 500UL) / 1000UL;
+const bool kLegacyPreloadEnabled = false;
 const uint8_t kDefaultWarmupSteps = 80;
 const uint8_t kDefaultWarmupCycles = 1;
 const uint8_t kMaxWarmupSteps = 80;
 const uint8_t kMaxWarmupCycles = 10;
-const uint8_t kWarmupMinDelayMs = 8;
-const long kHalfStepsPerOutputRev = 4096L;
-const float kMinRpm = 0.01F;
-const float kMaxRpm = 15.0F;
 
 // 28BYJ-48 half-step sequence
 const uint8_t SEQ[8][4] = {
@@ -64,12 +65,14 @@ const uint8_t SEQ[8][4] = {
 };
 
 int8_t g_phaseIdx = 0;
-unsigned long g_stepDelayMs = kDefaultStepDelayMs;
+const unsigned long g_stepDelayMs = kDefaultStepDelayMs;
+unsigned long g_lastStepAtUs = 0;
+bool g_hasStepped = false;
 uint8_t g_warmupSteps = kDefaultWarmupSteps;
 uint8_t g_warmupCycles = kDefaultWarmupCycles;
 int8_t g_dirSign = 1;
 bool g_holdEnabled = true;
-bool g_autoWarmupEnabled = true;
+bool g_autoWarmupEnabled = false;
 bool g_warmed = false;
 String g_line;
 bool g_moveActive = false;
@@ -78,7 +81,6 @@ bool g_continuousActive = false;
 bool g_calibrationActive = false;
 bool g_calibrationReturning = false;
 long g_calibrationSteps = 0;
-unsigned long g_calibrationPreviousDelayMs = kDefaultStepDelayMs;
 bool g_blockingMotionAbort = false;
 long g_moveRequestedSteps = 0;
 long g_moveExecutedSteps = 0;
@@ -120,18 +122,26 @@ static void releaseMotor() {
   digitalWrite(kMotorPins[3], LOW);
 }
 
-static void applyStep(int8_t dir) {
+static bool applyStep(int8_t dir) {
+  // Gate at the phase-output layer, across RUN/MOVE/CALI, STOP, RESUME and
+  // back-to-back one-step commands. A new command cannot reset this clock.
+  unsigned long now = micros();
+  if (g_hasStepped && (unsigned long)(now - g_lastStepAtUs) < kFixedStepIntervalUs) return false;
+  g_lastStepAtUs = now;
+  g_hasStepped = true;
   int16_t nextPhase = (int16_t)g_phaseIdx + dir;
   if (nextPhase < 0) nextPhase = 7;
   else if (nextPhase > 7) nextPhase = 0;
   g_phaseIdx = (int8_t)nextPhase;
 
   applyPhase((uint8_t)g_phaseIdx);
+  return true;
 }
 
 static void stepRaw(int8_t dir) {
-  applyStep(dir);
-  delay(g_stepDelayMs);
+  while (!applyStep(dir)) {
+    if (pollBlockingEmergencyStop()) return;
+  }
 }
 
 static bool pollBlockingEmergencyStop() {
@@ -147,11 +157,15 @@ static bool pollBlockingEmergencyStop() {
     String emergencyCommand = g_line;
     g_line = "";
     emergencyCommand.trim();
-    if (emergencyCommand.equalsIgnoreCase(F("STOP")) ||
-        emergencyCommand.equalsIgnoreCase(F("RELEASE"))) {
+    bool releaseRequested = emergencyCommand.equalsIgnoreCase(F("RELEASE"));
+    if (emergencyCommand.equalsIgnoreCase(F("STOP")) || releaseRequested) {
       g_blockingMotionAbort = true;
-      releaseMotor();
-      Serial.println(F("OK STOPPED"));
+      if (releaseRequested) {
+        releaseMotor();
+        Serial.println(F("OK RELEASED"));
+      } else {
+        Serial.println(F("OK STOPPED"));
+      }
       return true;
     }
     if (emergencyCommand.length() > 0) {
@@ -176,6 +190,8 @@ static void moveRaw(long steps) {
 }
 
 static void runWarmup(uint8_t steps, uint8_t cycles) {
+  // Retain legacy implementation for reference, but isolate it from production.
+  if (!kLegacyPreloadEnabled) return;
   g_blockingMotionAbort = false;
   if (steps < 1) steps = 1;
   if (steps > kMaxWarmupSteps) steps = kMaxWarmupSteps;
@@ -185,8 +201,6 @@ static void runWarmup(uint8_t steps, uint8_t cycles) {
     return;
   }
 
-  unsigned long prevDelay = g_stepDelayMs;
-  g_stepDelayMs = kWarmupMinDelayMs;
 
   for (uint8_t i = 0; i < cycles; i++) {
     moveRaw(steps);
@@ -197,8 +211,7 @@ static void runWarmup(uint8_t steps, uint8_t cycles) {
     delay(20);
   }
 
-  g_stepDelayMs = prevDelay;
-  if (!g_holdEnabled) {
+  if (!g_holdEnabled && !g_blockingMotionAbort) {
     releaseMotor();
   }
   g_warmed = !g_blockingMotionAbort;
@@ -223,7 +236,6 @@ static void finishActiveMove() {
     }
     g_calibrationActive = false;
     g_calibrationReturning = false;
-    g_stepDelayMs = g_calibrationPreviousDelayMs;
     if (!g_holdEnabled) releaseMotor();
     Serial.println(F("OK CALIBRATED"));
     return;
@@ -242,13 +254,13 @@ static void serviceActiveMove() {
   if ((long)(now - g_nextStepAtMs) < 0) return;
 
   if (g_continuousActive) {
-    applyStep(g_moveDirection);
+    if (!applyStep(g_moveDirection)) return;
     g_moveExecutedSteps++;
     g_nextStepAtMs = now + g_stepDelayMs;
     return;
   }
 
-  applyStep(g_moveDirection);
+  if (!applyStep(g_moveDirection)) return;
   g_moveExecutedSteps++;
   g_moveRemainingSteps--;
   if (g_moveRemainingSteps <= 0) {
@@ -269,7 +281,7 @@ static void moveSteps(long steps) {
   }
 
   g_blockingMotionAbort = false;
-  if (g_autoWarmupEnabled && !g_warmed) {
+  if (kLegacyPreloadEnabled && g_autoWarmupEnabled && !g_warmed) {
     runWarmup(g_warmupSteps, g_warmupCycles);
     if (g_blockingMotionAbort) return;
   }
@@ -299,31 +311,18 @@ static void handleSpeed(const String &arg) {
     Serial.println(F("ERR SPEED_MS format"));
     return;
   }
-  if (ms < kMinStepDelayMs) ms = kMinStepDelayMs;
-  if (ms > kMaxStepDelayMs) ms = kMaxStepDelayMs;
-  g_stepDelayMs = (unsigned long)ms;
+  if (ms != (long)kDefaultStepDelayMs) {
+    Serial.println(F("ERR FIXED_RPM 0.020"));
+    return;
+  }
   Serial.println(F("OK"));
 }
 
-static float clampRpm(float rpm) {
-  if (rpm < kMinRpm) return kMinRpm;
-  if (rpm > kMaxRpm) return kMaxRpm;
-  return rpm;
-}
-
-static void setSpeedRpm(float rpm) {
-  rpm = clampRpm(rpm);
-  float delayMs = 60000.0F / (rpm * (float)kHalfStepsPerOutputRev);
-  long roundedDelay = (long)(delayMs + 0.5F);
-  if (roundedDelay < kMinStepDelayMs) roundedDelay = kMinStepDelayMs;
-  if ((unsigned long)roundedDelay > kMaxContinuousStepDelayMs) {
-    roundedDelay = (long)kMaxContinuousStepDelayMs;
-  }
-  g_stepDelayMs = (unsigned long)roundedDelay;
-}
-
-static float currentRpm() {
-  return 60000.0F / ((float)kHalfStepsPerOutputRev * (float)g_stepDelayMs);
+static bool isFixedRpm(const String &text) {
+  char *end = NULL;
+  const char *start = text.c_str();
+  double rpm = strtod(start, &end);
+  return end != start && *end == '\0' && fabs(rpm - kFixedMotorRpm) < 0.00000001;
 }
 
 static void handleSpeedRpm(const String &arg) {
@@ -333,7 +332,10 @@ static void handleSpeedRpm(const String &arg) {
     Serial.println(F("ERR SPEED_RPM format"));
     return;
   }
-  setSpeedRpm(t.toFloat());
+  if (!isFixedRpm(t)) {
+    Serial.println(F("ERR FIXED_RPM 0.020"));
+    return;
+  }
   Serial.println(F("OK"));
 }
 
@@ -350,6 +352,10 @@ static void handleRun(const String &arg) {
   String rpmText = sp < 0 ? "" : t.substring(sp + 1);
   direction.trim();
   rpmText.trim();
+  if (rpmText.length() > 0 && !isFixedRpm(rpmText)) {
+    Serial.println(F("ERR FIXED_RPM 0.020"));
+    return;
+  }
 
   if (direction.equalsIgnoreCase(F("CW"))) {
     g_moveDirection = 1 * g_dirSign;
@@ -359,7 +365,6 @@ static void handleRun(const String &arg) {
     Serial.println(F("ERR RUN direction must be CW or CCW"));
     return;
   }
-  if (rpmText.length() > 0) setSpeedRpm(rpmText.toFloat());
 
   g_moveRequestedSteps = 0;
   g_moveExecutedSteps = 0;
@@ -399,6 +404,10 @@ static void handleDir(const String &arg) {
 }
 
 static void handleWarmup(const String &arg) {
+  if (!kLegacyPreloadEnabled) {
+    Serial.println(F("ERR PRELOAD_DISABLED"));
+    return;
+  }
   String t = arg;
   t.trim();
   int firstSp = t.indexOf(' ');
@@ -450,6 +459,10 @@ static void handleAutoWarm(const String &arg) {
   long enabled = 1;
   if (!parseStepsArg(arg, enabled, false)) {
     Serial.println(F("ERR AUTOWARM format"));
+    return;
+  }
+  if (!kLegacyPreloadEnabled && enabled != 0) {
+    Serial.println(F("ERR PRELOAD_DISABLED"));
     return;
   }
   g_autoWarmupEnabled = (enabled != 0);
@@ -515,8 +528,6 @@ static void handleCali(const String &arg) {
   if (steps > 20000) steps = 20000;
 
   g_blockingMotionAbort = false;
-  g_calibrationPreviousDelayMs = g_stepDelayMs;
-  g_stepDelayMs = 12;
 
   Serial.print(F("CALI "));
   Serial.print(F("Y-motor "));
@@ -573,26 +584,39 @@ static void handleStatus() {
   Serial.println(g_moveRemainingSteps);
 }
 
-static void handleStop() {
+static void handleStop(bool releaseCoils) {
   g_moveActive = false;
   g_continuousActive = false;
   g_movePaused = false;
   g_moveRemainingSteps = 0;
-  if (g_calibrationActive) {
-    g_stepDelayMs = g_calibrationPreviousDelayMs;
-  }
   g_calibrationActive = false;
   g_calibrationReturning = false;
   g_blockingMotionAbort = true;
-  releaseMotor();
+  if (releaseCoils) {
+    releaseMotor();
+  }
   g_warmed = false;
-  Serial.println(F("OK STOPPED"));
+  if (releaseCoils) {
+    Serial.println(F("OK RELEASED"));
+  } else {
+    Serial.println(F("OK STOPPED"));
+  }
 }
 
 static void handleCommand(const String &line) {
   String cmd = line;
   cmd.trim();
   if (cmd.length() == 0) return;
+  if (cmd.equalsIgnoreCase(F("FIRMWARE_ID"))) {
+    Serial.println(F("FIRMWARE_ID MSH_FIXED_002RPM_V1 AXIS=Y BOARD=MSH-B-Y-01 BUILD=20260916-01 TOPOLOGY=DUAL_UNO"));
+    return;
+  }
+  if (cmd.equalsIgnoreCase(F("MOTION_POLICY"))) {
+    Serial.print(F("MOTION_POLICY RPM=0.020 STEPS_PER_REV=4096 STEP_US="));
+    Serial.print(kFixedStepIntervalUs);
+    Serial.println(F(" PRELOAD=OFF"));
+    return;
+  }
 
   if (cmd.equalsIgnoreCase(F("PING"))) {
     Serial.println(F("PONG"));
@@ -710,11 +734,11 @@ static void handleCommand(const String &line) {
     return;
   }
   if (cmd.equalsIgnoreCase(F("STOP"))) {
-    handleStop();
+    handleStop(false);
     return;
   }
   if (cmd.equalsIgnoreCase(F("RELEASE"))) {
-    handleStop();
+    handleStop(true);
     return;
   }
   Serial.println(F("ERR unknown"));
@@ -726,12 +750,11 @@ void setup() {
   }
   releaseMotor();
   g_phaseIdx = 0;
-  g_stepDelayMs = kDefaultStepDelayMs;
   g_warmupSteps = kDefaultWarmupSteps;
   g_warmupCycles = kDefaultWarmupCycles;
   g_dirSign = 1;
   g_holdEnabled = true;
-  g_autoWarmupEnabled = true;
+  g_autoWarmupEnabled = false;
   g_warmed = false;
 
   Serial.begin(115200);
