@@ -5,6 +5,7 @@ import queue
 import sys
 import threading
 import time
+from dataclasses import dataclass
 from tempfile import TemporaryDirectory
 import unittest
 from pathlib import Path
@@ -28,6 +29,17 @@ if SPEC is None or SPEC.loader is None:
 GUI_MODULE = importlib.util.module_from_spec(SPEC)
 sys.modules[MODULE_NAME] = GUI_MODULE
 SPEC.loader.exec_module(GUI_MODULE)
+
+
+@dataclass
+class _PreviewDetection:
+    x1: int
+    y1: int
+    x2: int
+    y2: int
+    conf: float
+    cls_id: int
+    label: str
 
 
 class PreviewInferenceTests(unittest.TestCase):
@@ -66,6 +78,18 @@ class PreviewInferenceTests(unittest.TestCase):
             worker.join(timeout=1.0)
 
         self.assertFalse(worker.is_alive())
+
+    def test_detection_boxes_scale_from_inference_copy_to_raw_display(self) -> None:
+        detection = _PreviewDetection(12, 20, 60, 100, 0.9, 0, "WBC")
+
+        scaled = GUI_MODULE.StepperDragGUI._scale_preview_detections(
+            [detection],
+            source_shape=(513, 768, 3),
+            display_shape=(640, 960, 3),
+        )
+
+        self.assertEqual((scaled[0].x1, scaled[0].y1, scaled[0].x2, scaled[0].y2), (15, 25, 75, 125))
+        self.assertEqual((detection.x1, detection.y1, detection.x2, detection.y2), (12, 20, 60, 100))
 
 
 class MotorConnectionUiTests(unittest.TestCase):
@@ -175,7 +199,8 @@ class MotorConnectionUiTests(unittest.TestCase):
         gui._update_pylon_profile_display()
         self.assertTrue(gui._pylon_profile_status_label.removed)
         self.assertFalse(gui._pylon_profile_entry.removed)
-        self.assertEqual(gui._pylon_profile_entry.packs[-1]["before"], gui._pylon_profile_select_button)
+        self.assertEqual(gui._pylon_profile_entry.grids[-1]["row"], 2)
+        self.assertEqual(gui._pylon_profile_entry.grids[-1]["columnspan"], 3)
 
     def test_wbc_output_button_uses_reserved_slot_until_output_exists(self) -> None:
         gui = self._gui_without_tk()

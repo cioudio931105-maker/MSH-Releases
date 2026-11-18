@@ -1,6 +1,6 @@
 #define MyAppName "MSH"
 #ifndef MyAppVersion
-  #define MyAppVersion "0.1.1"
+  #define MyAppVersion "0.1.3"
 #endif
 #ifndef MyBuildDir
   #define MyBuildDir "..\dist\cpu\MSH"
@@ -19,7 +19,7 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={localappdata}\Programs\MSH
 DefaultGroupName=MSH
 DisableProgramGroupPage=yes
-OutputDir=..\dist\release
+OutputDir=..\dist\release\v{#MyAppVersion}
 OutputBaseFilename=MSH_Setup_v{#MyAppVersion}_{#MyBuildSuffix}
 SetupIconFile=..\assets\msh-pixel-icon.ico
 InfoBeforeFile=PREREQUISITES.txt

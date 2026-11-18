@@ -4,6 +4,7 @@ import threading
 import time
 import queue
 import ctypes
+import base64
 import csv
 import json
 import math
@@ -11,7 +12,7 @@ import os
 import shutil
 import subprocess
 import zipfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -162,6 +163,9 @@ except Exception:
 _PREVIEW_WINDOW_NAME = "Basler Live Preview"
 _PREVIEW_WINDOW_WIDTH = 960
 _PREVIEW_WINDOW_HEIGHT = 540
+_EMBEDDED_PREVIEW_MAX_WIDTH = 360
+_EMBEDDED_PREVIEW_MAX_HEIGHT = 240
+_EMBEDDED_PREVIEW_PLACEHOLDER_SIZE = 128
 _PREVIEW_PROCESS_MAX_LONG_SIDE = 768
 _CAPTURE_SAVE_MAX_LONG_SIDE = 1536
 _CAPTURE_PNG_COMPRESSION = 1
@@ -176,6 +180,7 @@ _PYLON_AUTO_GAIN_UPPER_DB = 36.0
 _DEFAULT_X_BACKLASH_STEPS = 60
 _DEFAULT_Y_BACKLASH_STEPS = 60
 _NORMAL_MOTOR_SPEED_MS = 5
+_FIXED_MANUAL_MOTOR_RPM = 0.02
 _SERPENTINE_STARTUP_EXTRA_STEPS = 72
 _SERPENTINE_VIDEO_TARGET_OVERLAP = 0.15
 _SERPENTINE_VIDEO_OVERLAP_TOLERANCE = 0.04
@@ -820,7 +825,7 @@ class StepperDragGUI:
             self.root.iconphoto(True, self._window_icon_image)
         self._window_icon_handles = _apply_windows_window_icon(self.root, icon_path)
         self._window_chrome_applied = _apply_windows_window_chrome(self.root)
-        window_width, window_height = 860, 760
+        window_width, window_height = 860, 720
         frame_width, frame_height = window_width, window_height
         if os.name == "nt":
             try:
@@ -855,6 +860,10 @@ class StepperDragGUI:
         self.pingpong_var = tk.BooleanVar(value=False)
         self.continuous_test_rpm_var = tk.DoubleVar(value=4.0)
         self.continuous_test_status_var = tk.StringVar(value="持續旋轉測試：停止")
+        self.manual_motion_status_var = tk.StringVar(value="手動低速移動：待命（固定 0.02 RPM）")
+        self._manual_motion_lock = threading.Lock()
+        self._manual_motion_generation: dict[int, int] = {0: 0, 1: 0}
+        self._manual_motion_direction: dict[int, Optional[int]] = {0: None, 1: None}
         self.camera_index_var = tk.IntVar(value=-1)
         # A PFS profile can be camera-specific. Never auto-apply a development
         # machine profile on another user's device; let the user choose it.
@@ -933,6 +942,14 @@ class StepperDragGUI:
         self._preview_inference_queue: queue.Queue[np.ndarray] = queue.Queue(maxsize=1)
         self._preview_detection_lock = threading.Lock()
         self._preview_detections: list = []
+        self._preview_display_lock = threading.Lock()
+        self._preview_display_frame: Optional[np.ndarray] = None
+        self._preview_display_message = "尚未開始預覽"
+        self._preview_display_label: Optional[tk.Label] = None
+        self._preview_display_frame_widget: Optional[tk.Frame] = None
+        self._preview_placeholder_image: Optional[tk.PhotoImage] = None
+        self._preview_photo_image: Optional[tk.PhotoImage] = None
+        self.preview_display_status_var = tk.StringVar(value="尚未開始預覽")
 
         self._auto_running = False
         self._auto_stop = threading.Event()
@@ -1075,45 +1092,22 @@ class StepperDragGUI:
 
         motor_controls = ttk.Frame(serial_group)
         motor_controls.grid(row=5, column=0, columnspan=6, sticky=tk.W)
-        ttk.Label(motor_controls, text="X 每次移動步數").grid(row=0, column=0, sticky=tk.W, pady=2)
-        ttk.Entry(motor_controls, textvariable=self.steps_var, width=10).grid(row=0, column=1, sticky=tk.W, padx=(8, 8), pady=2)
-        ttk.Button(motor_controls, text="X 前進", command=lambda: self._move(0, 1)).grid(row=0, column=2)
-        ttk.Button(motor_controls, text="X 後退", command=lambda: self._move(0, -1)).grid(row=0, column=3, padx=(8, 0))
-
-        ttk.Label(motor_controls, text="Y 每次移動步數").grid(row=1, column=0, sticky=tk.W, pady=2)
-        ttk.Entry(motor_controls, textvariable=self.y_steps_var, width=10).grid(row=1, column=1, sticky=tk.W, padx=(8, 8), pady=2)
-        ttk.Button(motor_controls, text="Y 前進", command=lambda: self._move(1, 1)).grid(row=1, column=2)
-        ttk.Button(motor_controls, text="Y 後退", command=lambda: self._move(1, -1)).grid(row=1, column=3, padx=(8, 0))
-        ttk.Label(motor_controls, text="方向鍵對應：左/右 -> X， 上/下 -> Y").grid(row=1, column=4, sticky=tk.W, padx=(8, 0))
-
-        ttk.Label(motor_controls, text="反轉補償").grid(row=2, column=0, sticky=tk.W, pady=2)
-        ttk.Label(motor_controls, text="X").grid(row=2, column=1, sticky=tk.W, padx=(8, 4), pady=2)
-        ttk.Entry(motor_controls, textvariable=self.x_backlash_var, width=8).grid(row=2, column=1, sticky=tk.W, padx=(28, 8), pady=2)
-        ttk.Label(motor_controls, text="Y").grid(row=2, column=2, sticky=tk.W, pady=2)
-        ttk.Entry(motor_controls, textvariable=self.y_backlash_var, width=8).grid(row=2, column=2, sticky=tk.W, padx=(20, 8), pady=2)
-        ttk.Label(motor_controls, text="方向切換時自動補償 backlash，不改變目標座標。").grid(
-            row=2, column=3, columnspan=3, sticky=tk.W, padx=(8, 0)
+        ttk.Label(motor_controls, text="固定低速移動（0.02 RPM）：按住移動，放開立即停止並保持通電。").grid(
+            row=0, column=0, columnspan=6, sticky=tk.W, pady=(2, 4)
         )
-        ttk.Label(motor_controls, text="預熱步數").grid(row=3, column=0, sticky=tk.W, pady=2)
-        ttk.Entry(motor_controls, textvariable=self.warmup_steps_var, width=8).grid(
-            row=3, column=1, sticky=tk.W, padx=(8, 8), pady=2
-        )
-        ttk.Label(motor_controls, text="次數").grid(row=3, column=2, sticky=tk.W, pady=2)
-        ttk.Entry(motor_controls, textvariable=self.warmup_cycles_var, width=5).grid(
-            row=3, column=2, sticky=tk.W, padx=(38, 8), pady=2
-        )
-        ttk.Button(motor_controls, text="X/Y 預熱一次", command=self._warmup_connected_axes_once).grid(
-            row=3, column=3, sticky=tk.W, padx=(8, 0), pady=2
-        )
-        ttk.Button(motor_controls, text="依次數預熱", command=self._warmup_connected_axes).grid(
-            row=3, column=4, sticky=tk.W, padx=(8, 0), pady=2
-        )
-        ttk.Label(motor_controls, text="+步數後再 -步數，不改變座標；太燙時建議只按一次。").grid(
-            row=4, column=0, columnspan=6, sticky=tk.W, pady=(2, 6)
+        self._bind_hold_to_move(ttk.Button(motor_controls, text="X 前進"), 0, 1).grid(row=1, column=0, padx=(0, 6), pady=2)
+        self._bind_hold_to_move(ttk.Button(motor_controls, text="X 後退"), 0, -1).grid(row=1, column=1, padx=(0, 14), pady=2)
+        self._bind_hold_to_move(ttk.Button(motor_controls, text="Y 前進"), 1, 1).grid(row=1, column=2, padx=(0, 6), pady=2)
+        self._bind_hold_to_move(ttk.Button(motor_controls, text="Y 後退"), 1, -1).grid(row=1, column=3, padx=(0, 14), pady=2)
+        ttk.Button(motor_controls, text="釋放 X/Y 馬達", command=self._release_all_continuous_motors).grid(row=1, column=4, padx=(0, 6), pady=2)
+        ttk.Label(motor_controls, textvariable=self.manual_motion_status_var).grid(row=2, column=0, columnspan=6, sticky=tk.W, pady=(2, 0))
+        ttk.Label(motor_controls, text="方向鍵：左／右 = X、上／下 = Y；關閉或斷線時會停止並釋放線圈。").grid(
+            row=3, column=0, columnspan=6, sticky=tk.W, pady=(2, 6)
         )
 
+        # Preserve the independent continuous-test widgets and handlers without
+        # showing this legacy test panel in the production GUI.
         continuous_group = ttk.LabelFrame(frame, text="28BYJ-48 持續旋轉測試（需使用 continuous 新版韌體）")
-        continuous_group.pack(fill=tk.X, pady=(0, 10))
         ttk.Label(continuous_group, text="測試轉速 RPM").grid(row=0, column=0, sticky=tk.W, padx=(6, 2), pady=6)
         ttk.Spinbox(
             continuous_group,
@@ -1172,36 +1166,116 @@ class StepperDragGUI:
             text="安全提示：先以 4 RPM、無負載測試；進行拍攝、蛇行、校正或預熱時禁止啟動。",
         ).grid(row=3, column=0, columnspan=7, sticky=tk.W, padx=6, pady=(0, 6))
 
-        cam_group = ttk.LabelFrame(frame, text="即時相機")
+        preview_workspace = ttk.LabelFrame(frame, text="即時預覽與辨識")
+        preview_workspace.pack(fill=tk.X, pady=(0, 10))
+        preview_workspace.columnconfigure(0, weight=3)
+        preview_workspace.columnconfigure(1, weight=2)
+
+        preview_frame = tk.Frame(
+            preview_workspace,
+            width=_EMBEDDED_PREVIEW_PLACEHOLDER_SIZE,
+            height=_EMBEDDED_PREVIEW_PLACEHOLDER_SIZE,
+            bg="#071627",
+            highlightthickness=1,
+            highlightbackground="#00D7E8",
+        )
+        preview_frame.grid(row=0, column=0, sticky=tk.N, padx=(8, 6), pady=8)
+        preview_frame.grid_propagate(False)
+        self._preview_display_frame_widget = preview_frame
+        self._preview_display_label = tk.Label(
+            preview_frame,
+            text="尚未開始預覽",
+            bg="#071627",
+            fg="#EAFBFF",
+            justify=tk.CENTER,
+            compound=tk.TOP,
+        )
+        self._preview_display_label.pack(fill=tk.BOTH, expand=True)
+        preview_icon_path = WORKSPACE_ROOT / "assets" / "msh-pixel-icon.png"
+        if preview_icon_path.is_file():
+            self._preview_placeholder_image = tk.PhotoImage(file=str(preview_icon_path))
+            icon_divisor = max(
+                1,
+                int(
+                    round(
+                        max(self._preview_placeholder_image.width(), self._preview_placeholder_image.height())
+                        / _EMBEDDED_PREVIEW_PLACEHOLDER_SIZE
+                    )
+                ),
+            )
+            if icon_divisor > 1:
+                self._preview_placeholder_image = self._preview_placeholder_image.subsample(icon_divisor, icon_divisor)
+            self._preview_display_label.configure(image=self._preview_placeholder_image)
+        ttk.Label(preview_workspace, textvariable=self.preview_display_status_var).grid(
+            row=1, column=0, sticky=tk.W, padx=8, pady=(0, 8)
+        )
+
+        preview_controls = ttk.Frame(preview_workspace)
+        preview_controls.grid(row=0, column=1, rowspan=2, sticky=tk.NSEW, padx=(6, 8), pady=8)
+        ttk.Label(preview_controls, text="預覽控制").grid(row=0, column=0, columnspan=3, sticky=tk.W)
+        ttk.Button(preview_controls, text="開始預覽", command=self._start_preview).grid(row=1, column=0, sticky=tk.W, pady=(4, 0))
+        ttk.Button(preview_controls, text="停止預覽", command=self._stop_preview).grid(row=1, column=1, sticky=tk.W, padx=(6, 0), pady=(4, 0))
+        ttk.Button(preview_controls, text="拍照", command=self._capture_frame).grid(row=1, column=2, sticky=tk.W, padx=(6, 0), pady=(4, 0))
+        ttk.Button(preview_controls, text="開啟輸出資料夾", command=self._open_output_folder).grid(
+            row=2, column=0, columnspan=2, sticky=tk.W, pady=(6, 0)
+        )
+        ttk.Button(preview_controls, text="自動畫質", command=self._apply_automatic_image_adjustment).grid(
+            row=2, column=2, sticky=tk.W, padx=(6, 0), pady=(6, 0)
+        )
+
+        detection_panel = ttk.LabelFrame(preview_controls, text="預覽物件辨識")
+        detection_panel.grid(row=3, column=0, columnspan=3, sticky=tk.EW, pady=(10, 0))
+        ttk.Checkbutton(detection_panel, text="顯示偵測框", variable=self.object_detect_preview_var).grid(
+            row=0, column=0, sticky=tk.W, padx=6, pady=(4, 2)
+        )
+        ttk.Label(detection_panel, text="信心值").grid(row=0, column=1, sticky=tk.W, padx=(8, 2), pady=(4, 2))
+        ttk.Entry(detection_panel, textvariable=self.object_detect_conf_var, width=7).grid(row=0, column=2, sticky=tk.W, pady=(4, 2))
+        ttk.Label(detection_panel, text="偵測模型").grid(row=1, column=0, sticky=tk.W, padx=6, pady=2)
+        ttk.Entry(detection_panel, textvariable=self.object_detect_model_var, width=18).grid(
+            row=1, column=1, columnspan=2, sticky=tk.EW, padx=(8, 4), pady=2
+        )
+        ttk.Button(detection_panel, text="選擇模型", command=self._choose_detect_model).grid(row=2, column=0, sticky=tk.W, padx=6, pady=(2, 4))
+        ttk.Button(detection_panel, text="套用 WBC 模型", command=self._reset_detect_model_to_default).grid(
+            row=2, column=1, columnspan=2, sticky=tk.W, padx=(8, 0), pady=(2, 4)
+        )
+        ttk.Label(detection_panel, textvariable=self.object_detect_model_status_var, wraplength=230).grid(
+            row=3, column=0, columnspan=3, sticky=tk.W, padx=6, pady=(0, 4)
+        )
+        ttk.Checkbutton(preview_controls, text="輸出偵測覆蓋圖", variable=self.object_detect_save_var).grid(
+            row=4, column=0, columnspan=3, sticky=tk.W, pady=(6, 0)
+        )
+
+        pylon_panel = ttk.LabelFrame(preview_controls, text="Pylon Viewer PFS")
+        pylon_panel.grid(row=5, column=0, columnspan=3, sticky=tk.EW, pady=(10, 0))
+        self._pylon_profile_status_label = ttk.Label(pylon_panel, textvariable=self.pylon_profile_display_var)
+        self._pylon_profile_entry = ttk.Entry(pylon_panel, textvariable=self.pylon_profile_path_var, width=22)
+        self._pylon_profile_select_button = ttk.Button(pylon_panel, text="選擇 PFS", command=self._choose_pylon_profile)
+        self._pylon_profile_select_button.grid(row=0, column=0, sticky=tk.W, padx=6, pady=(4, 2))
+        ttk.Button(pylon_panel, text="立即套用", command=self._apply_selected_pylon_profile).grid(
+            row=0, column=1, sticky=tk.W, padx=(6, 0), pady=(4, 2)
+        )
+        ttk.Checkbutton(pylon_panel, text="啟動時套用", variable=self.use_pylon_profile_var).grid(
+            row=0, column=2, sticky=tk.W, padx=(6, 0), pady=(4, 2)
+        )
+        ttk.Checkbutton(pylon_panel, text="保留 PFS 原始畫面", variable=self.pylon_profile_raw_frame_var).grid(
+            row=1, column=0, columnspan=2, sticky=tk.W, padx=6, pady=(2, 4)
+        )
+        ttk.Button(pylon_panel, text="停止套用 PFS", command=self._stop_applying_pylon_profile).grid(
+            row=1, column=2, sticky=tk.W, padx=(6, 0), pady=(2, 4)
+        )
+        self._update_pylon_profile_display()
+
+        cam_group = ttk.LabelFrame(frame, text="手動拍照與拼接")
         cam_group.pack(fill=tk.X, pady=(0, 10))
 
-        camera_toolbar = ttk.Frame(cam_group)
-        camera_toolbar.grid(row=0, column=0, columnspan=8, sticky=tk.W, pady=2)
-        ttk.Label(camera_toolbar, text="預覽").pack(side=tk.LEFT)
-        ttk.Button(camera_toolbar, text="開始預覽", command=self._start_preview).pack(side=tk.LEFT, padx=(6, 0))
-        ttk.Button(camera_toolbar, text="停止預覽", command=self._stop_preview).pack(side=tk.LEFT, padx=(6, 0))
-        ttk.Button(camera_toolbar, text="拍照", command=self._capture_frame).pack(side=tk.LEFT, padx=(6, 0))
-        ttk.Button(camera_toolbar, text="📁", width=3, command=self._open_output_folder).pack(side=tk.LEFT, padx=(6, 0))
-        ttk.Button(camera_toolbar, text="自動畫質", command=self._apply_automatic_image_adjustment).pack(side=tk.LEFT, padx=(6, 0))
-
         capture_actions = ttk.Frame(cam_group)
-        capture_actions.grid(row=1, column=0, columnspan=8, sticky=tk.W, pady=(8, 2))
-        ttk.Label(capture_actions, text="拍攝張數").pack(side=tk.LEFT)
-        count_combo = ttk.Combobox(
-            capture_actions,
-            textvariable=self.capture_count_var,
-            values=["50", "100", "200", "300", "500", "700", "1000", "1200", "1500"],
-            width=10,
-            state="normal",
-        )
-        count_combo.pack(side=tk.LEFT, padx=(6, 6))
+        capture_actions.grid(row=0, column=0, columnspan=8, sticky=tk.W, pady=(2, 2))
         ttk.Button(capture_actions, text="拼接手動拍照", command=self._stitch_manual_capture_session).pack(side=tk.LEFT)
         ttk.Button(capture_actions, text="終止拍攝", command=self._stop_capture_and_stitch).pack(side=tk.LEFT, padx=(6, 0))
-        ttk.Button(capture_actions, text="座標歸零", command=self._reset_virtual_coord).pack(side=tk.LEFT, padx=(6, 0))
-        ttk.Button(capture_actions, text="回到原點", command=self._move_to_origin).pack(side=tk.LEFT, padx=(6, 0))
 
         coordinate_controls = ttk.Frame(cam_group)
-        coordinate_controls.grid(row=2, column=0, columnspan=8, sticky=tk.W, pady=(8, 2))
+        # Preserve step/coordinate scanning controls for recovery, but do not
+        # display them while the GUI is in manual hold-to-move mode.
         ttk.Label(coordinate_controls, text="起始座標 X").grid(row=0, column=0, sticky=tk.W)
         ttk.Entry(coordinate_controls, textvariable=self.capture_start_x_var, width=10).grid(row=0, column=1, sticky=tk.W, padx=(6, 6))
         ttk.Label(coordinate_controls, text="起始座標 Y").grid(row=0, column=2, sticky=tk.W)
@@ -1231,25 +1305,6 @@ class StepperDragGUI:
         self.stitch_output_dir_var.trace_add("write", lambda *_args: self._update_output_path_row("stitch"))
         self._update_output_path_row("capture")
         self._update_output_path_row("stitch")
-        detection_controls = ttk.Frame(cam_group)
-        detection_controls.grid(row=6, column=0, columnspan=8, sticky=tk.W, pady=(8, 2))
-        ttk.Checkbutton(detection_controls, text="預覽物件辨識", variable=self.object_detect_preview_var).pack(side=tk.LEFT)
-        ttk.Checkbutton(detection_controls, text="輸出偵測覆蓋圖", variable=self.object_detect_save_var).pack(
-            side=tk.LEFT, padx=(8, 0)
-        )
-        ttk.Label(detection_controls, text="偵測信心值").pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Entry(detection_controls, textvariable=self.object_detect_conf_var, width=8).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Label(detection_controls, text="偵測模型").pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Entry(detection_controls, textvariable=self.object_detect_model_var, width=28).pack(side=tk.LEFT, padx=(8, 0))
-        ttk.Button(detection_controls, text="套用WBC模型", command=self._reset_detect_model_to_default).pack(
-            side=tk.LEFT, padx=(8, 0)
-        )
-        ttk.Label(cam_group, textvariable=self.object_detect_model_status_var).grid(
-            row=7, column=0, columnspan=7, sticky=tk.W, pady=(6, 2)
-        )
-        ttk.Label(cam_group, textvariable=self.wbc_subtype_model_status_var).grid(
-            row=8, column=0, columnspan=7, sticky=tk.W, pady=(6, 2)
-        )
         ttk.Label(
             cam_group,
             text="拼接策略：GUI 拼接按鈕優先使用正式拼接版本；正式引擎失敗時才回退舊自動流程。",
@@ -1258,27 +1313,12 @@ class StepperDragGUI:
             cam_group,
             text="注意：若使用通用 yolov8n.pt，細胞畫面通常不會有框；請改成細胞 detection 權重。",
         ).grid(row=11, column=0, columnspan=7, sticky=tk.W, pady=(2, 2))
-        pylon_controls = ttk.Frame(cam_group)
-        pylon_controls.grid(row=12, column=0, columnspan=8, sticky=tk.W, pady=(6, 2))
-        ttk.Label(pylon_controls, text="Pylon Viewer PFS").pack(side=tk.LEFT)
-        self._pylon_profile_status_label = ttk.Label(pylon_controls, textvariable=self.pylon_profile_display_var)
-        self._pylon_profile_entry = ttk.Entry(pylon_controls, textvariable=self.pylon_profile_path_var, width=44)
-        self._pylon_profile_select_button = ttk.Button(pylon_controls, text="選擇 PFS", command=self._choose_pylon_profile)
-        self._pylon_profile_select_button.pack(side=tk.LEFT)
-        ttk.Button(pylon_controls, text="立即套用 PFS", command=self._apply_selected_pylon_profile).pack(side=tk.LEFT, padx=(6, 0))
-        ttk.Checkbutton(pylon_controls, text="啟動時套用", variable=self.use_pylon_profile_var).pack(side=tk.LEFT, padx=(6, 0))
-        self._update_pylon_profile_display()
-
-        pylon_secondary_controls = ttk.Frame(cam_group)
-        pylon_secondary_controls.grid(row=13, column=0, columnspan=8, sticky=tk.W, pady=(2, 2))
-        ttk.Checkbutton(pylon_secondary_controls, text="保留 PFS 原始畫面", variable=self.pylon_profile_raw_frame_var).pack(side=tk.LEFT)
-        ttk.Button(pylon_secondary_controls, text="停止套用 PFS", command=self._stop_applying_pylon_profile).pack(side=tk.LEFT, padx=(6, 0))
 
         wbc_capture_group = ttk.LabelFrame(
             frame,
             text="固定速率座標化蛇行掃描 + White_Blood_Cell 手動拍攝",
         )
-        wbc_capture_group.pack(fill=tk.X, pady=(0, 10))
+        # This legacy step/coordinate scan panel is intentionally hidden.
 
         ttk.Label(wbc_capture_group, text="實驗名稱").grid(row=0, column=0, sticky=tk.W, pady=4)
         ttk.Entry(wbc_capture_group, textvariable=self.wbc_capture_experiment_var, width=24).grid(
@@ -1320,7 +1360,7 @@ class StepperDragGUI:
 
         ttk.Label(
             frame,
-            text="狀態：X-motor 與 Y-motor 由兩組獨立 COM 分別控制。方向鍵目前對應 左右=X、上下=Y",
+            text="狀態：X-motor 與 Y-motor 由兩組獨立 COM 分別控制。按住方向鍵移動，放開即停止。",
         ).pack(anchor=tk.W, pady=(2, 8))
 
         log_box = tk.Frame(frame)
@@ -1335,10 +1375,9 @@ class StepperDragGUI:
         self._append_log("已啟用相機自動偵測：預覽固定使用 Basler（acA3088-57Uc）。")
 
     def _bind_keyboard_shortcuts(self) -> None:
-        self.root.bind("<Left>", lambda event: self._handle_arrow_key(event, -1, 0))
-        self.root.bind("<Right>", lambda event: self._handle_arrow_key(event, 1, 0))
-        self.root.bind("<Up>", lambda event: self._handle_arrow_key(event, 1, 1))
-        self.root.bind("<Down>", lambda event: self._handle_arrow_key(event, -1, 1))
+        for key, direction, axis_id in (("Left", -1, 0), ("Right", 1, 0), ("Up", 1, 1), ("Down", -1, 1)):
+            self.root.bind(f"<{key}>", lambda event, d=direction, a=axis_id: self._handle_arrow_key_press(event, d, a))
+            self.root.bind(f"<KeyRelease-{key}>", lambda event, a=axis_id: self._handle_arrow_key_release(event, a))
 
     def _axis_name(self, axis_id: int) -> str:
         return self.axis_names.get(axis_id, f"軸{axis_id}")
@@ -1460,7 +1499,13 @@ class StepperDragGUI:
         else:
             self.status_vars[axis_id].set(f"{axis}-motor: 已連線 {stepper.port}")
 
-    def _handle_arrow_key(self, event: tk.Event, direction: int, axis_motor_id: int) -> str:
+    def _bind_hold_to_move(self, button: ttk.Button, axis_id: int, direction: int) -> ttk.Button:
+        button.bind("<ButtonPress-1>", lambda _event: self._start_manual_motion(axis_id, direction))
+        button.bind("<ButtonRelease-1>", lambda _event: self._stop_manual_motion(axis_id))
+        button.bind("<Leave>", lambda _event: self._stop_manual_motion(axis_id))
+        return button
+
+    def _handle_arrow_key_press(self, event: tk.Event, direction: int, axis_motor_id: int) -> str:
         widget = self.root.focus_get()
         if widget is not None:
             widget_class = widget.winfo_class()
@@ -1470,8 +1515,88 @@ class StepperDragGUI:
         if not self._get_stepper(0) and not self._get_stepper(1):
             return "break"
 
-        self._move(axis_motor_id, direction)
+        self._start_manual_motion(axis_motor_id, direction)
         return "break"
+
+    def _handle_arrow_key_release(self, _event: tk.Event, axis_motor_id: int) -> str:
+        # Always stop on key release, even if focus changed while the key was held.
+        self._stop_manual_motion(axis_motor_id)
+        return "break"
+
+    def _set_manual_motion_status(self, message: str) -> None:
+        try:
+            self.root.after(0, lambda: self.manual_motion_status_var.set(message))
+        except Exception:
+            pass
+
+    def _start_manual_motion(self, axis_id: int, direction: int) -> None:
+        if self._continuous_motor_test_blocked():
+            self._append_log("手動低速移動已略過：其他移動、校正或拍攝任務仍在執行。")
+            return
+        stepper = self._get_stepper(axis_id)
+        axis = self._axis_name(axis_id)
+        if stepper is None:
+            self._append_log(f"{axis}-motor 手動低速移動略過：尚未連線。")
+            return
+
+        # One active axis prevents an accidental diagonal run from two held keys.
+        for other_axis in (0, 1):
+            if other_axis != axis_id:
+                self._stop_manual_motion(other_axis)
+
+        normalized_direction = 1 if int(direction) >= 0 else -1
+        with self._manual_motion_lock:
+            if self._manual_motion_direction[axis_id] == normalized_direction:
+                return
+            self._manual_motion_generation[axis_id] += 1
+            generation = self._manual_motion_generation[axis_id]
+            self._manual_motion_direction[axis_id] = normalized_direction
+
+        direction_text = "正轉" if normalized_direction > 0 else "反轉"
+        self._set_manual_motion_status(f"手動低速移動：{axis} {direction_text}（0.02 RPM）")
+
+        def worker() -> None:
+            try:
+                response = stepper.run_continuous(normalized_direction, _FIXED_MANUAL_MOTOR_RPM)
+                with self._manual_motion_lock:
+                    still_active = (
+                        self._manual_motion_generation[axis_id] == generation
+                        and self._manual_motion_direction[axis_id] == normalized_direction
+                    )
+                if not still_active:
+                    stepper.stop()
+                    return
+                self._append_log(f"{axis}-motor 手動低速{direction_text}：0.02 RPM，回應={response}")
+            except Exception as exc:
+                with self._manual_motion_lock:
+                    if self._manual_motion_generation[axis_id] == generation:
+                        self._manual_motion_direction[axis_id] = None
+                self._append_log(f"{axis}-motor 手動低速移動啟動失敗：{exc}")
+                self._set_manual_motion_status(f"手動低速移動：{axis} 啟動失敗")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _stop_manual_motion(self, axis_id: int) -> None:
+        stepper = self._get_stepper(axis_id)
+        axis = self._axis_name(axis_id)
+        with self._manual_motion_lock:
+            was_active = self._manual_motion_direction[axis_id] is not None
+            self._manual_motion_generation[axis_id] += 1
+            self._manual_motion_direction[axis_id] = None
+        if not was_active or stepper is None:
+            return
+
+        self._set_manual_motion_status(f"手動低速移動：{axis} 停止並保持通電")
+
+        def worker() -> None:
+            try:
+                response = stepper.stop()
+                self._append_log(f"{axis}-motor 手動低速移動已停止（保持通電）：{response}")
+            except Exception as exc:
+                self._append_log(f"{axis}-motor 手動低速停止失敗：{exc}")
+                self._set_manual_motion_status(f"手動低速移動：{axis} 停止指令失敗")
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _append_log(self, msg: str) -> None:
         if threading.current_thread() is not threading.main_thread():
@@ -1516,19 +1641,25 @@ class StepperDragGUI:
         self.pylon_profile_display_var.set(display)
         if not hasattr(self, "_pylon_profile_entry"):
             return
-        self._pylon_profile_status_label.pack_forget()
-        self._pylon_profile_entry.pack_forget()
+        self._pylon_profile_status_label.grid_remove()
+        self._pylon_profile_entry.grid_remove()
         if profile_path:
-            self._pylon_profile_entry.pack(
-                side=tk.LEFT,
-                padx=(6, 6),
-                before=self._pylon_profile_select_button,
+            self._pylon_profile_entry.grid(
+                row=2,
+                column=0,
+                columnspan=3,
+                sticky=tk.EW,
+                padx=6,
+                pady=(0, 4),
             )
         else:
-            self._pylon_profile_status_label.pack(
-                side=tk.LEFT,
-                padx=(6, 6),
-                before=self._pylon_profile_select_button,
+            self._pylon_profile_status_label.grid(
+                row=2,
+                column=0,
+                columnspan=3,
+                sticky=tk.W,
+                padx=6,
+                pady=(0, 4),
             )
 
     def _update_wbc_output_button(self) -> None:
@@ -2397,17 +2528,16 @@ class StepperDragGUI:
             return
         try:
             stepper = ArduinoStepper(port=port, baud=int(self.baud_var.get()))
-            stepper.connect()
-            stepper.set_speed_ms(_NORMAL_MOTOR_SPEED_MS)
-            stepper.set_backlash_steps(self._current_backlash_steps(axis_id))
+            # Manual RUN mode must not probe by changing speed or initialize a
+            # legacy step-delay setting when a controller is connected.
+            stepper.connect(initialize_speed=False, probe_capabilities=False)
             try:
                 stepper.set_hold(True)
             except Exception:
                 pass
             self._set_stepper(axis_id, stepper)
             self._append_log(
-                f"{axis}-motor 已連線: {port}，反轉補償={self._current_backlash_steps(axis_id)} 步，"
-                f"穩定移動={'開' if self._motion_stabilization_enabled() else '關'}"
+                f"{axis}-motor 已連線: {port}，手動模式固定 0.02 RPM；按住控制移動。"
             )
         except Exception as exc:
             self._set_stepper(axis_id, None)
@@ -2428,6 +2558,7 @@ class StepperDragGUI:
                 continue
             axis = self._axis_name(aid)
             try:
+                self._stop_and_release_stepper(aid, stepper, reason="斷線")
                 stepper.close()
                 self._append_log(f"{axis}-motor 已斷線。")
             except Exception as exc:
@@ -2467,6 +2598,22 @@ class StepperDragGUI:
         except Exception as exc:
             self._append_log(f"移動失敗: {exc}")
             messagebox.showerror("移動失敗", str(exc))
+
+    def _stop_and_release_stepper(self, axis_id: int, stepper: ArduinoStepper, *, reason: str) -> None:
+        """Best-effort hardware shutdown before a serial link is released."""
+        axis = self._axis_name(axis_id)
+        with self._manual_motion_lock:
+            self._manual_motion_generation[axis_id] += 1
+            self._manual_motion_direction[axis_id] = None
+        try:
+            stepper.stop()
+        except Exception as exc:
+            self._append_log(f"{axis}-motor {reason}前 STOP 失敗：{exc}")
+        try:
+            stepper.release()
+            self._append_log(f"{axis}-motor {reason}保護：已停止並釋放線圈。")
+        except Exception as exc:
+            self._append_log(f"{axis}-motor {reason}前 RELEASE 失敗：{exc}")
 
     def _ensure_camera_open(self) -> Optional[cv2.VideoCapture]:
         if self.cap is not None:
@@ -2525,6 +2672,7 @@ class StepperDragGUI:
 
     @staticmethod
     def _prepare_preview_frame(frame: np.ndarray, max_long_side: int = _PREVIEW_PROCESS_MAX_LONG_SIDE) -> np.ndarray:
+        """Prepare a compact copy for preview inference only, never for display."""
         return StepperDragGUI._downscale_frame_quality_first(frame, max_long_side=max_long_side)
 
     @staticmethod
@@ -2546,6 +2694,66 @@ class StepperDragGUI:
         resized_width = max(1, int(round(width * scale)))
         resized_height = max(1, int(round(height * scale)))
         return cv2.resize(frame, (resized_width, resized_height), interpolation=cv2.INTER_AREA)
+
+    def _set_preview_display_message(self, message: str) -> None:
+        with self._preview_display_lock:
+            self._preview_display_message = str(message)
+
+    def _publish_preview_display_frame(self, frame: np.ndarray, message: str) -> None:
+        with self._preview_display_lock:
+            self._preview_display_frame = np.ascontiguousarray(frame.copy())
+            self._preview_display_message = str(message)
+
+    def _show_preview_placeholder(self, message: str) -> None:
+        self.preview_display_status_var.set(message)
+        if self._preview_display_frame_widget is not None:
+            self._preview_display_frame_widget.configure(
+                width=_EMBEDDED_PREVIEW_PLACEHOLDER_SIZE,
+                height=_EMBEDDED_PREVIEW_PLACEHOLDER_SIZE,
+            )
+        if self._preview_display_label is None:
+            return
+        self._preview_display_label.configure(image=self._preview_placeholder_image, text="")
+        self._preview_photo_image = None
+
+    def _resize_embedded_preview_area(self, frame: np.ndarray) -> None:
+        if self._preview_display_frame_widget is None:
+            return
+        height, width = frame.shape[:2]
+        self._preview_display_frame_widget.configure(width=max(1, int(width)), height=max(1, int(height)))
+
+    @staticmethod
+    def _preview_photoimage_from_bgr(frame: np.ndarray) -> tk.PhotoImage:
+        ok, encoded = cv2.imencode(".png", frame)
+        if not ok:
+            raise RuntimeError("無法轉換預覽畫面")
+        return tk.PhotoImage(data=base64.b64encode(encoded.tobytes()), format="png")
+
+    def _schedule_preview_display(self) -> None:
+        try:
+            self.root.after(33, self._preview_display_tick)
+        except Exception:
+            pass
+
+    def _preview_display_tick(self) -> None:
+        with self._preview_display_lock:
+            frame = None if self._preview_display_frame is None else self._preview_display_frame.copy()
+            message = self._preview_display_message
+        if not self._preview_running:
+            self._show_preview_placeholder(message or "預覽已停止")
+            return
+        if frame is None:
+            self._show_preview_placeholder(message or "等待 Basler 訊號…")
+        elif self._preview_display_label is not None:
+            try:
+                photo_image = self._preview_photoimage_from_bgr(frame)
+                self._preview_photo_image = photo_image
+                self._resize_embedded_preview_area(frame)
+                self._preview_display_label.configure(image=photo_image, text="")
+                self.preview_display_status_var.set(message)
+            except Exception as exc:
+                self._show_preview_placeholder(f"預覽顯示失敗：{exc}")
+        self._schedule_preview_display()
 
     @staticmethod
     def _prepare_capture_save_frame(
@@ -3015,6 +3223,20 @@ class StepperDragGUI:
     def _resolve_wbc_subtype_model_for_gui(self) -> str | None:
         return None
 
+    def _choose_detect_model(self) -> None:
+        selected = filedialog.askopenfilename(
+            title="選擇細胞偵測模型",
+            filetypes=[("YOLO / ONNX 模型", "*.pt *.onnx"), ("所有檔案", "*.*")],
+        )
+        if not selected:
+            return
+        self.object_detect_model_var.set(selected)
+        self.object_detect_model_status_var.set(f"目前模型: {Path(selected).name}（尚未載入）")
+        with self._detector_lock:
+            self._object_detector = None
+            self._object_detector_key = None
+        self._append_log(f"已選擇偵測模型：{selected}")
+
     def _reset_detect_model_to_default(self) -> None:
         if resolve_detect_model_path is None:
             self._append_log("無法解析預設偵測模型。")
@@ -3148,6 +3370,40 @@ class StepperDragGUI:
     def _latest_preview_detections(self) -> list:
         with self._preview_detection_lock:
             return list(self._preview_detections)
+
+    @staticmethod
+    def _scale_preview_detections(
+        detections: list,
+        source_shape: tuple[int, ...],
+        display_shape: tuple[int, ...],
+    ) -> list:
+        """Map inference boxes from the compact frame onto the raw display frame."""
+        if not detections:
+            return list(detections)
+        source_height, source_width = source_shape[:2]
+        display_height, display_width = display_shape[:2]
+        if source_width <= 0 or source_height <= 0:
+            return list(detections)
+        scale_x = display_width / float(source_width)
+        scale_y = display_height / float(source_height)
+        scaled: list = []
+        for detection in detections:
+            if not all(hasattr(detection, attribute) for attribute in ("x1", "y1", "x2", "y2")):
+                scaled.append(detection)
+                continue
+            try:
+                scaled.append(
+                    replace(
+                        detection,
+                        x1=int(round(detection.x1 * scale_x)),
+                        y1=int(round(detection.y1 * scale_y)),
+                        x2=int(round(detection.x2 * scale_x)),
+                        y2=int(round(detection.y2 * scale_y)),
+                    )
+                )
+            except TypeError:
+                scaled.append(detection)
+        return scaled
 
     def _save_detection_artifacts(
         self,
@@ -3359,14 +3615,8 @@ class StepperDragGUI:
         )
 
     def _preview_loop(self) -> None:
-        window_name = _PREVIEW_WINDOW_NAME
         fail_count = 0
         last_shape_info: Optional[tuple[tuple[int, int], tuple[int, int], tuple[int, int]]] = None
-        try:
-            cv2.namedWindow(window_name, cv2.WINDOW_AUTOSIZE)
-            cv2.moveWindow(window_name, 40, 40)
-        except Exception:
-            pass
         while not self._preview_stop.is_set():
             try:
                 frame_cap = self._ensure_camera_open()
@@ -3377,22 +3627,35 @@ class StepperDragGUI:
                     fail_count += 1
                     if fail_count == 1:
                         self._append_log("預覽警告：尚未拿到畫面幀，將持續重試。")
+                        self._set_preview_display_message("等待 Basler 訊號…")
                     if fail_count >= 60:
                         raise RuntimeError("長時間無法抓到畫面幀，請檢查相機供電/授權/USB。")
                     continue
                 fail_count = 0
                 x, y = self._get_virtual_coord()
+                # Display the original Basler frame.  Only the inference worker gets
+                # a compact copy, so the UI does not silently alter camera color,
+                # contrast, sharpness, or source resolution before rendering.
                 preview_source = self._prepare_preview_frame(frame)
-                preview = self._styled_camera_frame(preview_source)
+                preview = np.ascontiguousarray(frame.copy())
+                display_preview = self._resize_for_display_keep_aspect(
+                    preview,
+                    _EMBEDDED_PREVIEW_MAX_WIDTH,
+                    _EMBEDDED_PREVIEW_MAX_HEIGHT,
+                )
                 if bool(self.object_detect_preview_var.get()):
                     model_path = self._resolve_detect_model_for_gui()
                     status_text, status_color = self._describe_detect_model_status(model_path)
                     self._submit_preview_inference(preview_source)
-                    detections = self._latest_preview_detections()
+                    detections = self._scale_preview_detections(
+                        self._latest_preview_detections(),
+                        preview_source.shape,
+                        display_preview.shape,
+                    )
                     if detections and annotate_detections is not None:
-                        preview = annotate_detections(preview, detections)
+                        display_preview = annotate_detections(display_preview, detections)
                     put_text(
-                        preview,
+                        display_preview,
                         f"detections: {len(detections)}",
                         (10, 80),
                         0.7,
@@ -3400,7 +3663,7 @@ class StepperDragGUI:
                         2,
                     )
                     put_text(
-                        preview,
+                        display_preview,
                         f"model: {Path(model_path).name}",
                         (10, 108),
                         0.6,
@@ -3408,7 +3671,7 @@ class StepperDragGUI:
                         2,
                     )
                     put_text(
-                        preview,
+                        display_preview,
                         status_text,
                         (10, 136),
                         0.6,
@@ -3418,12 +3681,11 @@ class StepperDragGUI:
                 else:
                     with self._preview_detection_lock:
                         self._preview_detections = []
-                put_text(preview, "Live preview (press q to close)", (10, 24), 0.7, (0, 255, 0), 2)
-                put_text(preview, f"coord: {x},{y}", (10, 52), 0.7, (0, 220, 255), 2)
-                display_preview = self._resize_for_display_keep_aspect(
-                    preview,
-                    _PREVIEW_WINDOW_WIDTH,
-                    720,
+                put_text(display_preview, "Live preview", (10, 24), 0.7, (0, 255, 0), 2)
+                put_text(display_preview, f"coord: {x},{y}", (10, 52), 0.7, (0, 220, 255), 2)
+                self._publish_preview_display_frame(
+                    display_preview,
+                    f"Basler 原始畫面：{frame.shape[1]}×{frame.shape[0]} | 顯示：{display_preview.shape[1]}×{display_preview.shape[0]}",
                 )
                 shape_info = (
                     (int(frame.shape[1]), int(frame.shape[0])),
@@ -3438,19 +3700,14 @@ class StepperDragGUI:
                         f"preview={shape_info[1][0]}x{shape_info[1][1]}, "
                         f"display={shape_info[2][0]}x{shape_info[2][1]}"
                     )
-                cv2.imshow(window_name, display_preview)
-                if cv2.waitKey(1) & 0xFF == ord("q"):
-                    break
             except Exception as exc:
                 self._append_log(f"預覽錯誤: {exc}")
+                self._set_preview_display_message(f"預覽錯誤：{exc}")
                 break
 
         self._append_log("預覽已停止。")
+        self._set_preview_display_message("預覽已停止；尚無相機訊號時會顯示 MSH 圖標。")
         self._preview_inference_stop.set()
-        try:
-            cv2.destroyWindow(window_name)
-        except Exception:
-            pass
         self._preview_running = False
 
     def _start_preview(self) -> None:
@@ -3463,8 +3720,11 @@ class StepperDragGUI:
             except Exception:
                 pass
             self._ensure_camera_open()
+            with self._preview_display_lock:
+                self._preview_display_frame = None
             self._append_log(
-                f"預覽縮圖模式: 品質優先最大降階 (long_side={_PREVIEW_PROCESS_MAX_LONG_SIDE}px)"
+                "預覽模式: 顯示 Basler 原始畫面；僅依視窗等比例縮放。"
+                f"辨識工作者使用 long_side={_PREVIEW_PROCESS_MAX_LONG_SIDE}px 的獨立縮圖。"
             )
             if bool(self.object_detect_preview_var.get()):
                 model_path = self._resolve_detect_model_for_gui()
@@ -3486,6 +3746,9 @@ class StepperDragGUI:
         self._preview_inference_thread = threading.Thread(target=self._preview_inference_loop, daemon=True)
         self._preview_inference_thread.start()
         self._preview_running = True
+        self._set_preview_display_message("正在等待 Basler 訊號…")
+        self._show_preview_placeholder("正在等待 Basler 訊號…")
+        self._schedule_preview_display()
         self._preview_thread = threading.Thread(target=self._preview_loop, daemon=True)
         self._preview_thread.start()
         self._append_log("預覽已開始。")
@@ -3504,6 +3767,9 @@ class StepperDragGUI:
             inference_thread.join(timeout=1.0)
         self._preview_thread = None
         self._preview_inference_thread = None
+        with self._preview_display_lock:
+            self._preview_display_frame = None
+        self._show_preview_placeholder("預覽已停止；尚無相機訊號時會顯示 MSH 圖標。")
         with self._camera_lock:
             if self.cap is not None:
                 self.cap.release()
@@ -6806,6 +7072,7 @@ class StepperDragGUI:
             stepper = self._get_stepper(axis_id)
             if stepper is not None:
                 try:
+                    self._stop_and_release_stepper(axis_id, stepper, reason="關閉 GUI")
                     stepper.close()
                 except Exception:
                     pass

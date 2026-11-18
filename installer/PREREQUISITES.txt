@@ -1,4 +1,4 @@
-MSH v0.1.1 is the first formal release candidate for client review. It has not
+MSH v0.1.3 is a client-review update. It has not
 been publicly released or code-signed. Windows or antivirus software may show
 an unknown-publisher warning.
 

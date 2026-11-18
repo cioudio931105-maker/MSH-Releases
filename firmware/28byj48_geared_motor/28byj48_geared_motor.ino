@@ -44,7 +44,9 @@ constexpr uint8_t HALF_STEP_SEQUENCE[8][4] = {
 
 constexpr long HALF_STEPS_PER_OUTPUT_REV = 4096L;
 constexpr float DEFAULT_RPM = 8.0F;
-constexpr float MIN_RPM = 0.2F;
+// The manual microscope GUI uses a verified 0.02 RPM crawl speed. Keep the
+// independent continuous-test command configurable, but permit that speed.
+constexpr float MIN_RPM = 0.01F;
 constexpr float MAX_RPM = 15.0F;
 constexpr size_t COMMAND_BUFFER_SIZE = 64;
 

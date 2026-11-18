@@ -18,7 +18,12 @@ environments.
 ```
 
 The CPU build creates an onedir application at `dist\cpu\MSH\` and
-`dist\release\MSH_Setup_v<version>_CPU.exe` plus its SHA-256 checksum. Onedir
+`dist\release\v<version>\MSH_Setup_v<version>_CPU.exe` plus its SHA-256 checksum and
+`MSH_Setup_v<version>_CPU.exe.build-manifest.json`. The manifest records the Git commit,
+the packaged executable hash, the approved-model hash, hashes of release-critical
+source files, and whether the source worktree had uncommitted changes. The build always creates a new temporary PyInstaller output first; Inno
+Setup never consumes a pre-existing `dist\cpu\MSH` directory. Review the manifest before
+publishing and keep it next to the installer and checksum. Onedir
 is intentional: PyTorch, OpenCV,
 pypylon, and native DLLs are materially more reliable than a self-extracting
 onefile executable.
@@ -51,6 +56,19 @@ review release:
 
 The updater only opens the download after user confirmation. It does not execute
 the unsigned installer or replace running application files.
+
+Do not run `ISCC.exe` directly for a release. Only `scripts\build_release.ps1` creates
+the build manifest and guarantees that the installer source came from the same fresh
+PyInstaller run.
+
+## Release gates
+
+`build_release.ps1` defaults to **release mode**: the worktree must be clean and
+HEAD must carry the matching annotated release tag, such as `v0.1.4` for version
+`0.1.4`. It refuses to overwrite any existing installer. Use `-Candidate` only
+for internal review; it produces a separately named `_CANDIDATE.exe` and its
+manifest records `build_mode: candidate`. Candidate files must never be uploaded
+or referenced by `latest.json`.
 
 For a quick packaging smoke test without Inno Setup:
 

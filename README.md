@@ -39,7 +39,7 @@ credential.
 - Select COM ports in the GUI; no application COM port is hardcoded.
 - A Basler PFS profile is never applied automatically. Choose it explicitly for
   the active camera.
-- The v0.1.1 review build uses `wbc_focus_yolov8n_e_20260611.pt` as its
+- The v0.1.3 review build uses `wbc_focus_yolov8n_e_20260611.pt` as its
   built-in WBC-only detection model. It draws WBC bounding boxes but does not
   classify WBC subtypes. The generic `yolov8n.pt` remains only as a fallback.
 - A later approved model can be placed in `%LOCALAPPDATA%\MSH\models\` or
@@ -61,7 +61,7 @@ credential.
 Release maintainers should follow [BUILD.md](BUILD.md),
 [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md), and
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Current candidate notes are in
-[RELEASE_NOTES_v0.1.1.md](RELEASE_NOTES_v0.1.1.md).
+[RELEASE_NOTES_v0.1.3.md](RELEASE_NOTES_v0.1.3.md).
 
 ## 400x WBC-Only Detection
 

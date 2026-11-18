@@ -138,7 +138,12 @@ class ArduinoStepper:
 
         self._ser = serial.Serial(self.port, self.baud, timeout=self.timeout_s)
 
-    def connect(self) -> None:
+    def connect(self, *, initialize_speed: bool = True, probe_capabilities: bool = True) -> None:
+        """Open serial without changing controller settings unless requested.
+
+        Existing step-based callers retain the legacy defaults. The manual
+        low-speed GUI opts out because it uses the firmware's ``RUN`` command.
+        """
         if self._ser and self._ser.is_open:
             return
         self._open_serial()
@@ -146,8 +151,9 @@ class ArduinoStepper:
         self._ser.reset_input_buffer()
         self._ser.reset_output_buffer()
         self._last_direction_by_motor.clear()
-        self._supports_motor_id = self._probe_motor_id_support()
-        self._initialize_motor_speeds_ms(8)
+        self._supports_motor_id = self._probe_motor_id_support() if probe_capabilities else False
+        if initialize_speed:
+            self._initialize_motor_speeds_ms(8)
 
     def close(self) -> None:
         if self._ser:
