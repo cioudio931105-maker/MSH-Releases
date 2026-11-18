@@ -2,3 +2,6 @@
 # Source-code whitespace checks remain enabled elsewhere.
 /LICENSE -text -whitespace
 /licenses/** -text -whitespace
+
+# cmd.exe requires stable Windows line endings for the UTF-8 test launcher.
+/啟動_雙馬達測試.bat text eol=crlf
