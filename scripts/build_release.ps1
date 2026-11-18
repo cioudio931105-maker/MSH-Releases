@@ -21,13 +21,13 @@ $python = $pythonCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType
 if (-not $python) { throw "找不到發行用 Python。請用 -PythonPath 指定乾淨且已驗證的 Python 3.12 環境。" }
 
 & $python -c "import PyInstaller" 2>$null
-if ($LASTEXITCODE -ne 0) { throw "缺少 PyInstaller。請執行：$python -m pip install -r requirements-build.txt" }
+if ($LASTEXITCODE -ne 0) { throw "缺少 PyInstaller。請執行：$python -m pip install -r requirements/build.txt" }
 $torchRuntime = (& $python -c "import torch; print('gpu' if torch.version.cuda else 'cpu')").Trim()
-if ($LASTEXITCODE -ne 0) { throw "無法檢查 PyTorch runtime。請確認發行環境已安裝 requirements-$Runtime.txt。" }
+if ($LASTEXITCODE -ne 0) { throw "無法檢查 PyTorch runtime。請確認發行環境已安裝 requirements/$Runtime.txt。" }
 if ($torchRuntime -ne $Runtime) {
     throw "發行環境是 $torchRuntime 版 PyTorch，但指定的建置類型是 $Runtime。請使用正確的獨立環境。"
 }
-$version = (& $python -c "from msh_version import __version__; print(__version__)").Trim()
+$version = (& $python -c "from msh_app.core.msh_version import __version__; print(__version__)").Trim()
 if ($version -notmatch '^\d+\.\d+\.\d+([-.][0-9A-Za-z.-]+)?$') { throw "msh_version.py 的版本格式無效：$version" }
 $runtimeLabel = $Runtime.ToUpperInvariant()
 $buildMode = if ($Candidate) { "candidate" } else { "release" }
@@ -72,7 +72,7 @@ try {
     # Build into a new directory.  Never let Inno Setup consume a previous
     # dist\<runtime>\MSH tree after a failed or skipped PyInstaller build.
     New-Item -ItemType Directory -Force -Path $stagingRoot | Out-Null
-    & $python -m PyInstaller --noconfirm --clean --distpath $stagingDistPath --workpath $stagingWorkPath MSH.spec
+    & $python -m PyInstaller --noconfirm --clean --distpath $stagingDistPath --workpath $stagingWorkPath installer/MSH.spec
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller 建置失敗。請保留 $workPath 供診斷。" }
     $packagedApp = Join-Path $stagingApp "MSH.exe"
     if (-not (Test-Path -LiteralPath $packagedApp -PathType Leaf)) {
@@ -108,16 +108,16 @@ try {
     }
     $sourceFiles = [ordered]@{
         "launch_msh.pyw" = (Join-Path $projectRoot "launch_msh.pyw")
-        "msh_version.py" = (Join-Path $projectRoot "msh_version.py")
-        "MSH.spec" = (Join-Path $projectRoot "MSH.spec")
-        "msh_model_policy.py" = (Join-Path $projectRoot "msh_model_policy.py")
-        "msh_motion_policy.py" = (Join-Path $projectRoot "msh_motion_policy.py")
-        "msh_runtime.py" = (Join-Path $projectRoot "msh_runtime.py")
-        "msh_workers.py" = (Join-Path $projectRoot "msh_workers.py")
-        "msh_update.py" = (Join-Path $projectRoot "msh_update.py")
-        "msh_update_ui.py" = (Join-Path $projectRoot "msh_update_ui.py")
-        "msh_update_safety.py" = (Join-Path $projectRoot "msh_update_safety.py")
-        "msh_environment.py" = (Join-Path $projectRoot "msh_environment.py")
+        "msh_app/core/msh_version.py" = (Join-Path $projectRoot "msh_app/core/msh_version.py")
+        "installer/MSH.spec" = (Join-Path $projectRoot "installer/MSH.spec")
+        "msh_app/core/msh_model_policy.py" = (Join-Path $projectRoot "msh_app/core/msh_model_policy.py")
+        "msh_app/core/msh_motion_policy.py" = (Join-Path $projectRoot "msh_app/core/msh_motion_policy.py")
+        "msh_app/core/msh_runtime.py" = (Join-Path $projectRoot "msh_app/core/msh_runtime.py")
+        "msh_app/core/msh_workers.py" = (Join-Path $projectRoot "msh_app/core/msh_workers.py")
+        "msh_app/core/msh_update.py" = (Join-Path $projectRoot "msh_app/core/msh_update.py")
+        "msh_app/core/msh_update_ui.py" = (Join-Path $projectRoot "msh_app/core/msh_update_ui.py")
+        "msh_app/core/msh_update_safety.py" = (Join-Path $projectRoot "msh_app/core/msh_update_safety.py")
+        "msh_app/core/msh_environment.py" = (Join-Path $projectRoot "msh_app/core/msh_environment.py")
         "installer/run_update.ps1" = (Join-Path $projectRoot "installer\run_update.ps1")
         "installer/MSH.iss" = (Join-Path $projectRoot "installer\MSH.iss")
         "installer/MSH_Online.iss" = (Join-Path $projectRoot "installer\MSH_Online.iss")
@@ -128,9 +128,9 @@ try {
         "scripts/release_pipeline.py" = (Join-Path $projectRoot "scripts\release_pipeline.py")
         "scripts/ci_release.py" = (Join-Path $projectRoot "scripts\ci_release.py")
         ".github/workflows/release.yml" = (Join-Path $projectRoot ".github\workflows\release.yml")
-        "requirements-release-cpu.txt" = (Join-Path $projectRoot "requirements-release-cpu.txt")
-        "requirements-release-gpu.txt" = (Join-Path $projectRoot "requirements-release-gpu.txt")
-        "msh_distribution.py" = (Join-Path $projectRoot "msh_distribution.py")
+        "requirements/release-cpu.txt" = (Join-Path $projectRoot "requirements/release-cpu.txt")
+        "requirements/release-gpu.txt" = (Join-Path $projectRoot "requirements/release-gpu.txt")
+        "msh_app/core/msh_distribution.py" = (Join-Path $projectRoot "msh_app/core/msh_distribution.py")
         "LICENSE" = (Join-Path $projectRoot "LICENSE")
         "THIRD_PARTY_NOTICES.md" = (Join-Path $projectRoot "THIRD_PARTY_NOTICES.md")
         "hardware/arduino_stepper.py" = (Join-Path $projectRoot "msh_app\hardware\arduino_stepper.py")

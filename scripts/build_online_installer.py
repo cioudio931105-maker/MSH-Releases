@@ -17,8 +17,8 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from msh_update import RELEASE_REPOSITORY, validate_installer_url
-from msh_version import __version__
+from msh_app.core.msh_update import RELEASE_REPOSITORY, validate_installer_url
+from msh_app.core.msh_version import __version__
 
 
 def sha256(path: Path) -> str:
@@ -72,7 +72,7 @@ def main(argv=None) -> int:
             or cpu['manifest'].get('source_sha256') != gpu['manifest'].get('source_sha256')
             or cpu['manifest'].get('application_source_sha256') != gpu['manifest'].get('application_source_sha256')):
         raise ValueError('CPU/GPU packages must use the same source revision and source hashes')
-    for relative in ('installer/MSH_Online.iss', 'scripts/build_online_installer.py', 'msh_update.py'):
+    for relative in ('installer/MSH_Online.iss', 'scripts/build_online_installer.py', 'msh_app/core/msh_update.py'):
         if cpu['manifest']['source_sha256'].get(relative) != sha256(ROOT / relative):
             raise ValueError(f'Online bootstrap source changed since package build: {relative}')
     pylon = None

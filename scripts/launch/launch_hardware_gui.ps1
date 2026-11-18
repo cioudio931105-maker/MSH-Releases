@@ -6,7 +6,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$projectRoot = [System.IO.Path]::GetFullPath($PSScriptRoot)
+$projectRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $guiScript = Join-Path $projectRoot "msh_app\hardware\stepper_drag_gui.py"
 $launcher = Join-Path $projectRoot "launch_msh.pyw"
 $logDirectory = Join-Path $projectRoot "logs"

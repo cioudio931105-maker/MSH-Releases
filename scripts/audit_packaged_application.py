@@ -11,7 +11,7 @@ import zipfile
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
-from msh_distribution import application_files, is_application_file
+from msh_app.core.msh_distribution import application_files, is_application_file
 
 
 MODEL_SUFFIXES = {

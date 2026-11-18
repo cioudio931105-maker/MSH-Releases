@@ -11,7 +11,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from msh_version import __version__
+from msh_app.core.msh_version import __version__
 from scripts.build_online_installer import main as build_online
 from scripts.release_bundle import formal_source_check, git, load_json, prepare
 

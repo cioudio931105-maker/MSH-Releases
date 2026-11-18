@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from msh_model_policy import require_local_model
+from msh_app.core.msh_model_policy import require_local_model
 
 import csv
 import json
@@ -13,7 +13,7 @@ from typing import Any, Iterable
 
 import cv2
 import numpy as np
-from msh_motion_policy import FIXED_STEP_DELAY_MS
+from msh_app.core.msh_motion_policy import FIXED_STEP_DELAY_MS
 
 
 SIMULATION_MODE = False

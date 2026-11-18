@@ -10,7 +10,7 @@ import uuid
 
 import yaml
 
-from msh_model_policy import local_training_options, require_local_model
+from msh_app.core.msh_model_policy import local_training_options, require_local_model
 
 APP_ROOT=Path(__file__).resolve().parents[1]
 IMAGE_SUFFIXES={'.jpg','.jpeg','.png','.bmp','.tif','.tiff','.webp'}

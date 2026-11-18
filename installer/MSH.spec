@@ -6,9 +6,9 @@ import sys
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_submodules
 
-from msh_distribution import application_files
-
-ROOT = Path(SPECPATH).resolve()
+ROOT = Path(SPECPATH).resolve().parent
+sys.path.insert(0, str(ROOT))
+from msh_app.core.msh_distribution import application_files
 YOLO_BUILD_CONFIG = ROOT / "build" / "ultralytics"
 YOLO_BUILD_CONFIG.mkdir(parents=True, exist_ok=True)
 os.environ["YOLO_CONFIG_DIR"] = str(YOLO_BUILD_CONFIG)

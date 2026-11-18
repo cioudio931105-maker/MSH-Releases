@@ -44,13 +44,13 @@ GROUPS = {
     'msh_app':core('GUI、辨識支援與硬體控制的正式程式','hardware/ 放視窗與 driver，cell_identification/ 放辨識／分類；另保留腳本和 Arduino 原始碼。它是程式，不是拼接輸出。','介面、相機預覽、平台控制、辨識支援；韌體來源的刪除影響須逐檔區分。',['launch_msh.pyw：GUI_SCRIPT','MSH.spec：msh_app/hardware、cell_identification']),
     'cell_stitching_project':core('影像處理與掃描的主要 Python 套件','提供影像對齊、拼接、白血球偵測、掃描錄影、資料整理、訓練與文字繪製等共用功能。','GUI 共用模組及 CLI 拼接、偵測、訓練流程。',['msh_app/hardware/stepper_drag_gui.py：imports','MSH.spec：datas']),
     'microscope_stitcher_project':core('GUI 使用的離線正式拼接引擎','依影像與座標對齊、合成拼接圖，產生品質報告及與基準位置的比較；不只是獨立試驗副本。','GUI 拍攝後拼接、practical-stitch、golden-compare。',['msh_workers.py：WORKER_SCRIPTS','msh_app/hardware/stepper_drag_gui.py：_run_formal_stitcher_session']),
-    'msh_runtime.py':core('執行環境、可寫入位置與日誌','區分來源版與 EXE 的資源路徑，建立使用者輸出／日誌目錄並限制同時啟動多個 GUI。','啟動、資源位置、記錄錯誤、輸出路徑。',['launch_msh.pyw：msh_runtime imports']),
-    'msh_model_policy.py':core('模型必須由使用者提供的檢查','確認選定模型是存在的本機檔案，避免把缺檔名稱誤作自動下載模型；也提供訓練的本機政策。','模型載入與訓練前檢查。',['cell_stitching_project/cell_identification.py','msh_app/cell_identification/object_detection.py']),
-    'msh_motion_policy.py':core('固定馬達操作政策的共用定義','讓 GUI、driver 與掃描工具使用一致的固定速度／步距政策及回覆檢查。','GUI 與 driver 匯入、馬達操作政策檢查；刪檔不是修改馬達參數的方法。',['msh_app/hardware/arduino_stepper.py','tests/test_continuous_firmware_contract.py']),
-    'msh_update.py':core('版本更新資訊讀取與驗證','讀取更新描述、比較版本及核對下載資訊，供「說明／檢查更新」選單使用。','更新選單；啟動器也直接匯入此模組。',['launch_msh.pyw：msh_update imports']),
-    'msh_version.py':core('應用程式版本來源','統一提供 GUI、版本比較、建置腳本與安裝包所用版本號。','啟動、版本顯示、打包。',['launch_msh.pyw：__version__','scripts/build_release.ps1']),
-    'msh_workers.py':core('封裝 EXE 的離線工作分派','只允許啟動指定的拼接／基準比較腳本，讓 EXE 不必假裝成 Python 解譯器。','啟動器匯入、GUI 拼接與基準比較。',['launch_msh.pyw：dispatch_worker','MSH.spec']),
-    'msh_distribution.py':item('純應用程式打包的檔案白名單','決定哪些來源、品牌圖和授權檔可進交接包／安裝包，排除研究資料與模型。',
+    'msh_app/core/msh_runtime.py':core('執行環境、可寫入位置與日誌','區分來源版與 EXE 的資源路徑，建立使用者輸出／日誌目錄並限制同時啟動多個 GUI。','啟動、資源位置、記錄錯誤、輸出路徑。',['launch_msh.pyw：msh_runtime imports']),
+    'msh_app/core/msh_model_policy.py':core('模型必須由使用者提供的檢查','確認選定模型是存在的本機檔案，避免把缺檔名稱誤作自動下載模型；也提供訓練的本機政策。','模型載入與訓練前檢查。',['cell_stitching_project/cell_identification.py','msh_app/cell_identification/object_detection.py']),
+    'msh_app/core/msh_motion_policy.py':core('固定馬達操作政策的共用定義','讓 GUI、driver 與掃描工具使用一致的固定速度／步距政策及回覆檢查。','GUI 與 driver 匯入、馬達操作政策檢查；刪檔不是修改馬達參數的方法。',['msh_app/hardware/arduino_stepper.py','tests/test_continuous_firmware_contract.py']),
+    'msh_app/core/msh_update.py':core('版本更新資訊讀取與驗證','讀取更新描述、比較版本及核對下載資訊，供「說明／檢查更新」選單使用。','更新選單；啟動器也直接匯入此模組。',['launch_msh.pyw：msh_update imports']),
+    'msh_app/core/msh_version.py':core('應用程式版本來源','統一提供 GUI、版本比較、建置腳本與安裝包所用版本號。','啟動、版本顯示、打包。',['launch_msh.pyw：__version__','scripts/build_release.ps1']),
+    'msh_app/core/msh_workers.py':core('封裝 EXE 的離線工作分派','只允許啟動指定的拼接／基準比較腳本，讓 EXE 不必假裝成 Python 解譯器。','啟動器匯入、GUI 拼接與基準比較。',['launch_msh.pyw：dispatch_worker','MSH.spec']),
+    'msh_app/core/msh_distribution.py':item('純應用程式打包的檔案白名單','決定哪些來源、品牌圖和授權檔可進交接包／安裝包，排除研究資料與模型。',
         '目前已開啟的 GUI 不會因此變小；刪除會讓來源稽核、打包或來源交接流程失敗，並失去資料排除規則。',
         features='Release 建置、資料散布邊界、來源交接。',action='保留。',evidence=['MSH.spec：application_files','scripts/audit_application_files.py'],risk='required'),
     'msh_release_model.py':item('舊 v0.1.1 模型身分記錄','保存當時 WBC 單類模型的檔名、SHA-256 與類別；不是模型權重，也不表示現版自動內建該模型。',
@@ -95,7 +95,7 @@ GROUPS = {
     'reports':evidence('拼接結果的定量位置與指標報告','保存 2026-06-21 拼接位置 JSON 和量化指標摘要；不是 GUI 排版檔案。',['reports/QUANTITATIVE_METRICS_SUMMARY_20260621.md']),
     'reports/paper_training_charts':evidence('論文／研究用訓練圖表','由訓練紀錄整理的研究圖表；GUI 不靠它啟動，但投稿或研究說明可能仍引用它。',['reports/paper_training_charts/'],loss='刪除會失去這份圖表與製圖結果；只有仍持有來源 CSV、製圖程式及相同設定時才可能重建。'),
     'release':item('自動更新描述與範本','保存 latest.example.json 及相關說明，供 Release 維護時準備更新資訊。',
-        '通常不會讓本機 GUI 不能開，但會失去更新發布範本；本機範本不是已發布的遠端更新檔。',features='後續版本發布與更新維護。',action='保留。',evidence=['msh_update.py','release/latest.example.json']),
+        '通常不會讓本機 GUI 不能開，但會失去更新發布範本；本機範本不是已發布的遠端更新檔。',features='後續版本發布與更新維護。',action='保留。',evidence=['msh_app/core/msh_update.py','release/latest.example.json']),
     'Ultralytics':item('YOLO 本機設定與字型','本次包含 settings.json 與 Arial.ttf，用於 YOLO 套件的本機設定／文字繪製；不是白血球權重。',
         '刪設定可能重建預設值，刪字型可能改變標註文字或引發重新尋找／下載字型；離線條件下不一定成功。',features='YOLO 設定與標註文字；不是視窗按鈕位置。',action='原有未追蹤字型保留；不能為了 Git 乾淨而刪除。',evidence=['Ultralytics/settings.json、Arial.ttf','msh_runtime.py：configure_runtime_environment']),
     '__pycache__':item('根目錄 Python 編譯快取','Python 為加速匯入產生的 .pyc；原始 .py 還在時通常可以重建。',
@@ -201,6 +201,22 @@ for name,what in (
     GROUPS[name]=item(what+'清單','這是安裝／重建套件的文字配方，不是套件本身。',
         '刪清單不會同時移除已安裝套件，GUI 可能仍能開；但新機重建、問題重現及 Release 驗證失去依據。',
         features='環境重建與交接。',action='保留，容量極小。',evidence=[name],risk='required')
+
+# Current layout aliases preserve explanations for old archived inventories too.
+for _old, _new in {
+    'MSH.spec': 'installer/MSH.spec',
+    'install_gui_shortcut.ps1': 'scripts/launch/install_gui_shortcut.ps1',
+    'launch_hardware_gui.ps1': 'scripts/launch/launch_hardware_gui.ps1',
+    'msh_release_model.py': 'docs/legacy/model-release-v0.1.1/msh_release_model.py',
+    'requirements-build.txt': 'requirements/build.txt',
+    'requirements-cpu.txt': 'requirements/cpu.txt',
+    'requirements-gpu.txt': 'requirements/gpu.txt',
+    'requirements-release-v0.1.4.txt': 'docs/legacy/requirements-release-v0.1.4.txt',
+}.items():
+    GROUPS[_new] = GROUPS[_old]
+for _module in ('msh_runtime', 'msh_model_policy', 'msh_motion_policy', 'msh_update',
+                'msh_version', 'msh_workers', 'msh_distribution'):
+    GROUPS[_module + '.py'] = GROUPS['msh_app/core/' + _module + '.py']
 
 ROLES = {
  'unknown-file':item('單檔用途仍待核對','此筆屬於下方群組，但目前未取得足夠的單檔引用／格式資訊。','不能把整個群組的刪除後果直接當作這一個檔案的結果；也不能宣稱無影響。',features='需依檔案內容、建立流程及引用位置再判讀。',action='保留待確認，先看下方群組用途。',risk='unknown',certainty='單檔用途未確認。'),

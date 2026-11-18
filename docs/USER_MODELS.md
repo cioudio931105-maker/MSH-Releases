@@ -8,6 +8,6 @@ Local training remains supported; data, labels, weights and outputs stay outside
 Git. Research presets describe paths, not included models. Supply your own label
 lists if required. No particular model name or hash is required to build MSH.
 
-`msh_release_model.py` and `RELEASE_MODEL_v0.1.1.md` are historical identity records
-for earlier review artifacts only; they do not authorize bundling a model today.
-See [the application-only policy](../docs/APPLICATION_ONLY_POLICY.md).
+See [the application-only policy](APPLICATION_ONLY_POLICY.md).
+Historical v0.1.1 identity metadata is archived under `docs/legacy/model-release-v0.1.1/`;
+it is not imported by the application and is not permission to bundle a model.

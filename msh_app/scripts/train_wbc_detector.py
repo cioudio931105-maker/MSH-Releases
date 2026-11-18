@@ -7,7 +7,7 @@ if not getattr(_msh_sys, "frozen", False):
     _msh_sys.path.insert(0, str(_MshPath(__file__).resolve().parents[2]))
 
 
-from msh_model_policy import require_local_model, local_training_options
+from msh_app.core.msh_model_policy import require_local_model, local_training_options
 
 import argparse
 from pathlib import Path

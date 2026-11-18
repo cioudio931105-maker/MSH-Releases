@@ -32,7 +32,9 @@ MSH 提供操作介面與功能，**模型及研究資料由使用者自行提�
 
 - [線上安裝與自動更新（GPU 優先）](docs/ONLINE_INSTALL_AND_UPDATE_zh_TW.md)：`0.1.5-dev.5` 使用同一個 `MSH-Releases` 開發與發行；仍需乾淨 Windows 與 B 地驗收。
 - [單一 repo 開發與發行](docs/AUTOMATED_RELEASE_zh_TW.md)：在 `MSH-Releases` 維護程式、建置與發版；使用 GitHub 當次工作的內建授權，不需要個人發版 token。各工作階段依對照表獨立保留；提交與同步狀態以 Git 紀錄為準。
-- [核心目錄](docs/PROJECT_MAP.md)
+- [專案目錄與根目錄保留理由](docs/PROJECT_MAP.md)
+- [模型由使用者提供](docs/USER_MODELS.md)
+- [本機開發環境與封存前檢查](docs/DEVELOPMENT_ENVIRONMENTS.md)
 - [純應用程式／資料政策](docs/APPLICATION_ONLY_POLICY.md)
 - [安裝版建置](docs/release/BUILD.md) · [發行檢查表](docs/release/RELEASE_CHECKLIST.md)
 - [舊版 README 快照](docs/legacy/README_BEFORE_CORE_ISOLATION.md)

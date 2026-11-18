@@ -8,14 +8,14 @@
 
 正式安裝版以 `MSH.exe` 啟動；PyInstaller 設定 `console=False`。
 來源版桌面／開始功能表捷徑直接指向 `pythonw.exe → launch_msh.pyw`，不經 CMD。
-`install_gui_shortcut.ps1 -CheckOnly` 可唯讀查看預計使用的 runtime／路徑。
+`scripts/launch/install_gui_shortcut.ps1 -CheckOnly` 可唯讀查看預計使用的 runtime／路徑。
 故障診斷明確保留在 `scripts/diagnostics/run_hardware_gui.bat`，其 console 是診斷用途。
 命令列訓練／資料整理功能保留在 `scripts/commands/`，不要求一般使用者開終端機。
 
 ```powershell
-.\install_gui_shortcut.ps1 -CheckOnly
-.\install_gui_shortcut.ps1 -Location Both
-.\launch_hardware_gui.ps1 -CheckOnly
+.\scripts\launch\install_gui_shortcut.ps1 -CheckOnly
+.\scripts\launch\install_gui_shortcut.ps1 -Location Both
+.\scripts\launch\launch_hardware_gui.ps1 -CheckOnly
 ```
 
 ## 應用程式結構
@@ -33,9 +33,7 @@
 | `docs/release/` | BUILD、發行檢查表與歷史 release notes |
 | `tools/release_audit/` | 本機 artifact 盤點、離線審閱與決策匯出 |
 
-根目錄保留 README、AGENTS、LICENSE、THIRD_PARTY_NOTICES、requirements、
-MSH.spec、GUI 啟動／捷徑安裝入口，以及既有 `msh_*.py` 共用匯入介面。
-保留介面可避免外部程式、測試或打包流程因模組名稱改動而失效。
+根目錄只保留標準文件、Git 規則及必要啟動／相容入口；共用模組使用 `msh_app.core` 匯入。完整現行配置與保留理由見 [PROJECT_MAP.md](PROJECT_MAP.md)。
 根目錄 `serpentine_recording.py`、`wbc_serpentine_capture.py` 是相容 CLI，未刪除。
 
 | 舊位置 | 新位置 |
@@ -52,7 +50,7 @@ MSH.spec、GUI 啟動／捷徑安裝入口，以及既有 `msh_*.py` 共用匯�
 已搬移的 `.ino` 逐檔 SHA-256 必須與整理前一致。
 
 封裝會收進 GUI 所需的 `microscope_stitcher_project` 純程式來源，排除 reference
-研究資料。`msh_workers.py` 僅允許 practical-stitch 與 golden-compare 兩個離線工作；
+研究資料。`msh_app/core/msh_workers.py` 僅允許 practical-stitch 與 golden-compare 兩個離線工作；
 凍結 EXE 以該工作入口執行拼接，不再把 EXE 當成 Python 解譯器開啟腳本或第二個 GUI。
 
 ## 模型與訓練資料 Artifact

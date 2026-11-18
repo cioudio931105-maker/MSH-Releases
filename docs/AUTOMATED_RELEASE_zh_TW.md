@@ -6,7 +6,7 @@
 
 ## 遷移方式與目前狀態
 
-本機乾淨副本位於 `C:\Projects\MSH-Releases`，使用獨立的 `codex/single-repo-development` branch。
+正式來源副本位於 `C:\Projects\MSH-Releases`；遷移基準由 `codex/single-repo-development` 經 PR #1 整合至 `main`，後續修改使用各自工作分支。
 它以公開庫原本的 README 歷史為基礎，帶入目前可發行的應用程式快照；沒有複製舊 `.git`、模型、資料、開發環境或舊安裝檔。
 程式碼會公開，適用既有 AGPL-3.0-only 及第三方聲明。
 來源提交／推送與 main 整合須完成審查並取得使用者明確授權，狀態以 Git 紀錄為準。本文件不代表已完成硬體或正式發行驗收。
@@ -25,8 +25,8 @@ APP 下載更新使用公開的 `main/latest.json` 與 Release 附件，不攜�
 3. 原私人專案不用每次搬動或同步，只保留歷史及原檔。
 
 模型與資料沒有搬進新庫。開發環境也沒有複製成 Git 檔案；本機驗證可明確指定既有 Python 執行檔。
-此機的新副本可透過忽略的本機連結共用已驗證的 CPU／GPU 環境。新的開發機則使用 Python 3.12 的獨立環境，安裝對應的 `requirements-release-cpu.txt` 或 `requirements-release-gpu.txt`。
-不要在兩個資料夾交錯修改同一功能。既有已安裝 MSH 與桌面捷徑不因來源遷移而改動。
+正式副本使用自身的 Python 3.12.13 基底與獨立 CPU／GPU 環境；其他工作階段可共用這些新環境。新的開發機依對應的 `requirements/release-cpu.txt` 或 `requirements/release-gpu.txt` 重建，詳見 [本機開發環境](DEVELOPMENT_ENVIRONMENTS.md)。
+日常修改以新正式副本或其工作階段為準。既有已安裝版 MSH 保留；來源版桌面捷徑在環境驗證後切換到新副本，並保留原捷徑備份。
 
 ## GitHub Actions
 

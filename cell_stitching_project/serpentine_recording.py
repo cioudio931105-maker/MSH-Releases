@@ -12,7 +12,7 @@ from typing import Protocol, Sequence
 
 import cv2
 import numpy as np
-from msh_motion_policy import FIXED_STEP_DELAY_MS
+from msh_app.core.msh_motion_policy import FIXED_STEP_DELAY_MS
 
 Point = tuple[float, float]
 

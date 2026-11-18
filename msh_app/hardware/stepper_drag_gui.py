@@ -26,11 +26,11 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from arduino_stepper import ArduinoStepper, list_serial_ports
-from msh_motion_policy import (
+from msh_app.core.msh_motion_policy import (
     FIXED_MOTOR_RPM, FIXED_STEP_DELAY_MS, FIXED_STEPS_PER_SECOND,
     LEGACY_PRELOAD_ENABLED,
 )
-from msh_workers import worker_command
+from msh_app.core.msh_workers import worker_command
 
 def _find_workspace_root(start: Path) -> Path:
     for candidate in [start.parent, *start.parents]:
@@ -45,7 +45,7 @@ for import_root in (PROJECT_ROOT, WORKSPACE_ROOT):
     if str(import_root) not in sys.path:
         sys.path.insert(0, str(import_root))
 
-from msh_runtime import default_output_dir
+from msh_app.core.msh_runtime import default_output_dir
 
 
 def _apply_windows_window_icon(window: tk.Tk, icon_path: Path) -> tuple[int, int] | None:

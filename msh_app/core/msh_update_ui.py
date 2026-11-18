@@ -13,13 +13,13 @@ import tkinter as tk
 from tkinter import messagebox, ttk
 import webbrowser
 
-from msh_environment import (BASLER_DOWNLOAD_URL, NVIDIA_DRIVER_URL,
+from msh_app.core.msh_environment import (BASLER_DOWNLOAD_URL, NVIDIA_DRIVER_URL,
                              compute_capability, environment_report)
-from msh_runtime import application_root, local_app_data_dir
-from msh_update import (DownloadCancelled, UpdateManifest, check_for_update,
+from msh_app.core.msh_runtime import application_root, local_app_data_dir
+from msh_app.core.msh_update import (DownloadCancelled, UpdateManifest, check_for_update,
                         download_installer, verify_installer)
-from msh_update_safety import update_blockers
-from msh_version import __version__
+from msh_app.core.msh_update_safety import update_blockers
+from msh_app.core.msh_version import __version__
 
 
 class UpdateController:

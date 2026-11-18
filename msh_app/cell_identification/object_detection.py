@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from msh_model_policy import require_local_model
-from msh_environment import inference_device
+from msh_app.core.msh_model_policy import require_local_model
+from msh_app.core.msh_environment import inference_device
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -10,7 +10,7 @@ from typing import Any, Sequence
 import cv2
 import numpy as np
 
-from msh_runtime import local_app_data_dir
+from msh_app.core.msh_runtime import local_app_data_dir
 
 try:
     from cell_stitching_project.text_overlay import get_text_size, put_text

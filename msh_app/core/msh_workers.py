@@ -5,7 +5,7 @@ from pathlib import Path
 import runpy
 import sys
 
-from msh_runtime import application_root, configure_logging, configure_runtime_environment
+from msh_app.core.msh_runtime import application_root, configure_logging, configure_runtime_environment
 
 WORKER_SCRIPTS = {
     'practical-stitch': 'microscope_stitcher_project/run_practical_stitch.py',
@@ -26,7 +26,7 @@ def dispatch_worker(arguments: list[str]) -> bool:
         if len(arguments) != 2:
             raise ValueError('Environment report requires exactly one output path')
         # Software-only acceptance entry; never constructs a GUI/camera/motor object.
-        from msh_environment import environment_report
+        from msh_app.core.msh_environment import environment_report
         configure_runtime_environment()
         Path(arguments[1]).write_text(environment_report() + '\n', encoding='utf-8')
         return True

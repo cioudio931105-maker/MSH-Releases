@@ -1,6 +1,6 @@
 # MSH release checklist
 
-1. Set `msh_version.py` to the intended Semantic Version (`MAJOR.MINOR.PATCH`).
+1. Set `msh_app/core/msh_version.py` to the intended Semantic Version (`MAJOR.MINOR.PATCH`).
 2. Review status, diff, requirements and third-party terms. Run `python scripts/audit_application_files.py`; source and payloads must exclude models and research data.
    For v0.1.4, resolve the native pylon/AGPL combination and outstanding source-delivery items in [the source evidence inventory](../THIRD_PARTY_SOURCE_INVENTORY_v0.1.4.md) before public binary distribution. Preserve all applicable runtime notices and place verified corresponding-source access instructions next to the binary download. A version/notice inventory alone is insufficient.
 3. Run source tests and record pass/fail/not-tested results.

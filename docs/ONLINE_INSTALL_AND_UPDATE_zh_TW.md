@@ -57,7 +57,7 @@ python scripts/build_online_installer.py --candidate --cpu dist/release/v0.1.5-d
 ```
 
 `build_online_installer.py` 要求 CPU/GPU 版本、mode、來源 commit、來源雜湊及純應用程式政策一致，並核對實際套件 checksum。
-更新器 `msh_update.py` 的來源雜湊也必須相符，避免把仍指向 Private 原庫的舊 APP 與新發行庫的線上入口混用；改來源後須重建 CPU／GPU 與 ONLINE 三個包。
+更新器 `msh_app/core/msh_update.py` 的來源雜湊也必須相符，避免把仍指向 Private 原庫的舊 APP 與新發行庫的線上入口混用；改來源後須重建 CPU／GPU 與 ONLINE 三個包。
 正式模式仍沿用乾淨來源與版本 tag 的建置要求；不允許把 candidate 直接改名成 release，也不覆寫既有產物。
 產物位於 `dist/release/v<版本>/`，包含安裝檔、`.sha256` 與 `.build-manifest.json`。
 正式版不能使用 `-Candidate`／`--candidate`；本次不建立或發布正式版。

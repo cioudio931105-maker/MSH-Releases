@@ -16,7 +16,7 @@ class ReleaseLayoutTests(unittest.TestCase):
         gui=eval(compile(ast.Expression(assignment.value),'launcher-path','eval'),{'PROJECT_ROOT':ROOT})
         self.assertEqual(gui,ROOT/'msh_app/hardware/stepper_drag_gui.py')
         self.assertTrue(gui.is_file())
-        spec=(ROOT/'MSH.spec').read_text(encoding='utf-8')
+        spec=(ROOT/'installer/MSH.spec').read_text(encoding='utf-8')
         self.assertIn('ROOT / "msh_app"',spec)
         self.assertIn('"msh_app/hardware"',spec)
         self.assertIn('console=False',spec)
@@ -49,7 +49,7 @@ class ReleaseLayoutTests(unittest.TestCase):
             self.assertEqual(detect(old),str(detect_model))
 
     def test_normal_shortcut_and_diagnostic_have_distinct_entrypoints(self):
-        shortcut=(ROOT/'install_gui_shortcut.ps1').read_text(encoding='utf-8-sig')
+        shortcut=(ROOT/'scripts/launch/install_gui_shortcut.ps1').read_text(encoding='utf-8-sig')
         self.assertIn('$shortcut.TargetPath = $pythonw',shortcut)
         self.assertIn('$launcher = Join-Path $projectRoot "launch_msh.pyw"',shortcut)
         self.assertNotIn('$shortcut.TargetPath = "cmd',shortcut)

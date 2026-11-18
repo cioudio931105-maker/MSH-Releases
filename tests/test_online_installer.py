@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from msh_version import __version__
+from msh_app.core.msh_version import __version__
 from scripts import build_online_installer as builder
 from scripts.build_online_installer import inspect_package, pascal_define
 
@@ -54,14 +54,14 @@ class OnlinePackageValidationTests(unittest.TestCase):
 
     def test_old_updater_source_cannot_be_mixed_with_new_online_bootstrapper(self):
         hashes = {name: builder.sha256(builder.ROOT / name) for name in
-                  ('installer/MSH_Online.iss', 'scripts/build_online_installer.py', 'msh_update.py')}
-        hashes['msh_update.py'] = '0' * 64
+                  ('installer/MSH_Online.iss', 'scripts/build_online_installer.py', 'msh_app/core/msh_update.py')}
+        hashes['msh_app/core/msh_update.py'] = '0' * 64
         with TemporaryDirectory() as temp:
             root = Path(temp)
             cpu = self.fixture(root, runtime='cpu', git_commit='a' * 40, source_sha256=hashes)
             gpu = self.fixture(root, runtime='gpu', git_commit='a' * 40, source_sha256=hashes)
             with patch.object(builder.subprocess, 'run') as compiler:
-                with self.assertRaisesRegex(ValueError, 'msh_update.py'):
+                with self.assertRaisesRegex(ValueError, 'msh_app/core/msh_update.py'):
                     builder.main(['--candidate', '--cpu', str(cpu), '--gpu', str(gpu)])
                 compiler.assert_not_called()
 
@@ -69,7 +69,7 @@ class OnlinePackageValidationTests(unittest.TestCase):
         with TemporaryDirectory() as temp:
             root = Path(temp)
             hashes = {}
-            for name in ('installer/MSH_Online.iss', 'scripts/build_online_installer.py', 'msh_update.py'):
+            for name in ('installer/MSH_Online.iss', 'scripts/build_online_installer.py', 'msh_app/core/msh_update.py'):
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes((builder.ROOT / name).read_bytes())

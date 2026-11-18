@@ -18,8 +18,8 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from msh_distribution import is_application_file
-from msh_update import RELEASE_REPOSITORY, _ReleaseRedirectHandler, is_newer_version, parse_update_manifest
+from msh_app.core.msh_distribution import is_application_file
+from msh_app.core.msh_update import RELEASE_REPOSITORY, _ReleaseRedirectHandler, is_newer_version, parse_update_manifest
 from scripts.release_bundle import MAX_ASSET_BYTES, SECRET, load_json, public_source_file, sha256, validate_public_acceptance
 
 
