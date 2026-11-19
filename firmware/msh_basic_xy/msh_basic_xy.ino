@@ -8,10 +8,26 @@
 // Library pin order is IN1, IN3, IN2, IN4; physical wiring stays as above.
 AccelStepper motorX(AccelStepper::FULL4WIRE, 4, 6, 5, 7);
 AccelStepper motorY(AccelStepper::FULL4WIRE, 8, 10, 9, 11);
+AccelStepper* activeStep = nullptr;
 
 void stopHolding() {
+  if (activeStep != nullptr) {
+    activeStep = nullptr;
+    Serial.println(F("STEP CANCELLED"));
+  }
+  motorX.moveTo(motorX.currentPosition());
+  motorY.moveTo(motorY.currentPosition());
   motorX.setSpeed(0);
   motorY.setSpeed(0);
+}
+
+void stepOnce(AccelStepper& motor, int direction, int steps) {
+  // Ignore a burst while a finite move is pending; never extend its target.
+  if (activeStep != nullptr) return;
+  stopHolding();
+  motor.move(direction * steps);
+  motor.setSpeed(direction * 50);
+  activeStep = &motor;
 }
 
 void powerOff() {
@@ -29,16 +45,37 @@ void setup() {
 }
 
 void loop() {
-  if (Serial.available()) {
+  while (Serial.available()) {
     switch (Serial.read()) {
       case 'a': stopHolding(); motorX.setSpeed(50); break;
       case 'b': stopHolding(); motorX.setSpeed(-50); break;
       case 'c': stopHolding(); motorY.setSpeed(50); break;
       case 'd': stopHolding(); motorY.setSpeed(-50); break;
+      case 'A': stepOnce(motorX, 1, 1); break;
+      case 'B': stepOnce(motorX, -1, 1); break;
+      case 'C': stepOnce(motorY, 1, 1); break;
+      case 'D': stepOnce(motorY, -1, 1); break;
+      case 'E': stepOnce(motorX, 1, 5); break;
+      case 'F': stepOnce(motorX, -1, 5); break;
+      case 'G': stepOnce(motorY, 1, 5); break;
+      case 'H': stepOnce(motorY, -1, 5); break;
+      case 'I': stepOnce(motorX, 1, 10); break;
+      case 'J': stepOnce(motorX, -1, 10); break;
+      case 'K': stepOnce(motorY, 1, 10); break;
+      case 'L': stepOnce(motorY, -1, 10); break;
       case 's': stopHolding(); break;
       case 'q': powerOff(); break;
     }
   }
-  motorX.runSpeed();
-  motorY.runSpeed();
+  if (activeStep != nullptr) {
+    activeStep->runSpeedToPosition();
+    if (activeStep->distanceToGo() == 0) {
+      activeStep->setSpeed(0);
+      activeStep = nullptr;
+      Serial.println(F("STEP DONE"));
+    }
+  } else {
+    motorX.runSpeed();
+    motorY.runSpeed();
+  }
 }

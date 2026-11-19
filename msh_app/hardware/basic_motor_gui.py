@@ -19,12 +19,17 @@ class BasicMotorGUI:
         self._closing = False
         self._pressed = None
         self._connected = False
+        self._step_pending = False
+        self._step_latched = False
+        self._active_step_count = 5
         root.title("MSH ConstantSpeed 雙馬達測試（單 UNO）")
         root.resizable(False, False)
         frame = ttk.Frame(root, padding=16)
         frame.grid(sticky="nsew")
         self.port_var = tk.StringVar()
-        self.status_var = tk.StringVar(value="未連線。請先燒錄配套韌體，再選擇 UNO 的 COM。")
+        self.status_var = tk.StringVar(value="未連線。微調需先燒錄新版配套韌體，再選擇 UNO 的 COM。")
+        self.motion_mode = tk.StringVar(value="step")
+        self.step_count_var = tk.StringVar(value="5")
         ttk.Label(frame, text="UNO COM 連接埠").grid(row=0, column=0, sticky="w")
         self.port_combo = ttk.Combobox(frame, textvariable=self.port_var, state="readonly", width=13)
         self.port_combo.grid(row=0, column=1, padx=6)
@@ -32,11 +37,24 @@ class BasicMotorGUI:
         self.refresh_button.grid(row=0, column=2, padx=4)
         self.connect_button = ttk.Button(frame, text="連線", command=self._connect)
         self.connect_button.grid(row=0, column=3, padx=4)
-        ttk.Label(frame, text="ConstantSpeed：整步 50 步／秒。\n按住移動，放開停止；關閉視窗時關閉線圈。", justify="left").grid(
-            row=1, column=0, columnspan=4, sticky="w", pady=(14, 8)
+        modes = ttk.Frame(frame)
+        modes.grid(row=1, column=0, columnspan=4, sticky="w", pady=(12, 0))
+        self.mode_buttons = [
+            ttk.Radiobutton(modes, text=label, variable=self.motion_mode, value=value,
+                            command=self._change_mode)
+            for label, value in (("微調：每次", "step"), ("連續：按住移動", "continuous"))
+        ]
+        for column, button in enumerate(self.mode_buttons):
+            button.grid(row=0, column=column * 3, padx=(0, 8))
+        self.step_count_combo = ttk.Combobox(modes, textvariable=self.step_count_var,
+                                            values=("5", "10"), state="readonly", width=3)
+        self.step_count_combo.grid(row=0, column=1)
+        ttk.Label(modes, text="整步").grid(row=0, column=2, padx=(4, 16))
+        ttk.Label(frame, text="微調：點一下移動選定步數，不連發，完成後才接受下一次。\n連續：50 整步／秒，放開停止；關閉視窗時關閉線圈。", justify="left").grid(
+            row=2, column=0, columnspan=4, sticky="w", pady=(10, 8)
         )
         controls = ttk.Frame(frame)
-        controls.grid(row=2, column=0, columnspan=4, sticky="w")
+        controls.grid(row=3, column=0, columnspan=4, sticky="w")
         self.motion_buttons = {}
         for column, (label, mode) in enumerate((
             ("X 前進", "X+"), ("X 後退", "X-"), ("Y 前進", "Y+"), ("Y 後退", "Y-"),
@@ -47,9 +65,9 @@ class BasicMotorGUI:
             button.bind("<Leave>", lambda _e, m=mode: self._leave(m))
             self.motion_buttons[mode] = button
         ttk.Label(frame, textvariable=self.status_var, wraplength=525, justify="left").grid(
-            row=3, column=0, columnspan=4, sticky="w", pady=(12, 0)
+            row=4, column=0, columnspan=4, sticky="w", pady=(12, 0)
         )
-        root.bind("<ButtonRelease-1>", lambda _e: self._stop(), add="+")
+        root.bind("<ButtonRelease-1>", lambda _e: self._release(), add="+")
         root.bind("<FocusOut>", self._focus_out, add="+")
         root.bind("<Unmap>", lambda _e: self._stop(), add="+")
         root.protocol("WM_DELETE_WINDOW", self.close)
@@ -73,7 +91,16 @@ class BasicMotorGUI:
 
     def _motion_controls(self, enabled):
         for button in self.motion_buttons.values():
-            button.configure(state="normal" if enabled else "disabled")
+            button.configure(state="normal" if enabled and not self._step_pending else "disabled")
+        self.step_count_combo.configure(state="readonly" if not self._step_pending and not self._closing else "disabled")
+
+    def _change_mode(self):
+        self._stop()
+
+    def _release(self):
+        self._step_latched = False
+        if self.motion_mode.get() == "continuous":
+            self._stop()
 
     def _connect(self):
         try:
@@ -85,7 +112,18 @@ class BasicMotorGUI:
         self.status_var.set("正在開啟 COM，等待 UNO 啟動…")
 
     def _press(self, mode):
-        if self._connected and not self._closing:
+        if self._connected and not self._closing and not self._step_pending:
+            if self.motion_mode.get() == "step":
+                if self._step_latched or self._step_pending:
+                    return
+                self._step_latched = True
+                count = int(self.step_count_var.get())
+                if self.session.request_step(mode, count):
+                    self._active_step_count = count
+                    self._step_pending = True
+                    self._motion_controls(False)
+                    self.status_var.set(f"正在要求 {count} 整步微調，等待韌體完成…")
+                return
             self._pressed = mode
             self.session.request(mode)
 
@@ -95,6 +133,7 @@ class BasicMotorGUI:
 
     def _stop(self):
         self._pressed = None
+        self._step_latched = False
         self.session.request("HOLD")
 
     def _focus_out(self, _event):
@@ -114,6 +153,8 @@ class BasicMotorGUI:
         self._pressed = None
         self._motion_controls(False)
         self._connection_controls(False)
+        for button in self.mode_buttons:
+            button.configure(state="disabled")
         self.status_var.set("正在停止兩軸並關閉線圈輸出…")
         self.session.close()
 
@@ -127,12 +168,24 @@ class BasicMotorGUI:
                 self._connected = True
                 if not self._closing:
                     self._motion_controls(True)
-                    self.status_var.set(f"已開啟 {value}。請確認已上傳配套 ConstantSpeed 韌體。")
+                    self.status_var.set(f"已開啟 {value}。請確認已上傳含微調的新版配套韌體。")
             elif kind == "state" and not self._closing:
                 self.status_var.set("已送出停止指令，保持目前線圈狀態。" if value == "HOLD" else f"已送出 {value[0]} {'前進' if value[1] == '+' else '後退'}指令。")
+            elif kind == "step_sent" and not self._closing:
+                self.status_var.set(f"已送出 {self._active_step_count} 整步微調，等待韌體回報完成…")
+            elif kind in ("step_done", "step_cancelled"):
+                self._step_pending = False
+                if not self._closing:
+                    self._motion_controls(self._connected)
+                    self.status_var.set(
+                        f"韌體回報 {value[0]} {'前進' if value[1] == '+' else '後退'} {self._active_step_count} 整步完成。"
+                        if kind == "step_done" else "微調已取消，請確認畫面後再操作。"
+                    )
             elif kind in ("error", "closed"):
                 self._connected = False
                 self._pressed = None
+                self._step_pending = False
+                self._step_latched = False
                 self._motion_controls(False)
                 if not self._closing:
                     self._connection_controls(True)
